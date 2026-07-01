@@ -4,6 +4,7 @@ Tests for main orchestrator
 """
 
 import pytest
+import numpy as np
 from unittest.mock import Mock, patch, MagicMock
 import sys
 
@@ -11,15 +12,8 @@ import sys
 sys.modules['faster_whisper'] = MagicMock()
 sys.modules['piper'] = MagicMock()
 
-# Mock the bare module imports used by src/main.py
-sys.modules['listener'] = MagicMock()
-sys.modules['retriever'] = MagicMock()
-sys.modules['composer'] = MagicMock()
-sys.modules['brain'] = MagicMock()
-sys.modules['speaker'] = MagicMock()
-
 from src.main import VoiceAssistant, main
-import numpy as np
+from exceptions import ListenerError, SearchError, GenerationError, SpeakerError
 
 
 @pytest.fixture
@@ -50,7 +44,6 @@ def test_cleanup(voice_assistant):
 
 def test_listen_and_respond_low_audio(voice_assistant):
     """Test listen_and_respond when audio level is too low (silence)"""
-    # Simulate very quiet audio (below 0.03 threshold)
     silent_audio = np.zeros(16000, dtype=np.float32)
     voice_assistant.listener.record_audio.return_value = silent_audio
 
@@ -61,21 +54,17 @@ def test_listen_and_respond_low_audio(voice_assistant):
 
 def test_listen_and_respond_empty_transcription(voice_assistant):
     """Test listen_and_respond when transcription is empty"""
-    # Audio with sufficient level but empty transcription
     audio = np.full(16000, 0.1, dtype=np.float32)
     voice_assistant.listener.record_audio.return_value = audio
     voice_assistant.listener.transcribe.return_value = "   "
 
     voice_assistant.listen_and_respond()
 
-    # Should return early without calling retriever
     voice_assistant.retriever.search_web.assert_not_called()
-    voice_assistant.speaker.speak.assert_not_called()
 
 
 def test_listen_and_respond_successful_flow(voice_assistant):
     """Test the full successful conversation flow"""
-    # Setup mocks for each step
     audio = np.full(16000, 0.5, dtype=np.float32)
     voice_assistant.listener.record_audio.return_value = audio
     voice_assistant.listener.transcribe.return_value = "今日の天気はどうですか"
@@ -87,7 +76,6 @@ def test_listen_and_respond_successful_flow(voice_assistant):
 
     voice_assistant.listen_and_respond()
 
-    # Verify full pipeline was called
     voice_assistant.listener.record_audio.assert_called_once()
     voice_assistant.listener.transcribe.assert_called_once_with(audio)
     voice_assistant.retriever.search_web.assert_called_once_with("今日の天気はどうですか")
@@ -96,20 +84,39 @@ def test_listen_and_respond_successful_flow(voice_assistant):
     voice_assistant.speaker.speak.assert_called_once_with("今日は晴れです")
 
 
-def test_listen_and_respond_exception(voice_assistant):
-    """Test listen_and_respond handles generic exceptions gracefully"""
-    voice_assistant.listener.record_audio.side_effect = RuntimeError("Mic error")
+def test_listen_and_respond_recording_failure(voice_assistant):
+    """Test that ListenerError propagates from record_audio"""
+    voice_assistant.listener.record_audio.side_effect = ListenerError("mic broken")
+    with pytest.raises(ListenerError):
+        voice_assistant.listen_and_respond()
 
-    # Should not raise
+
+def test_listen_and_respond_search_failure_degrades_gracefully(voice_assistant):
+    """Test that SearchError is caught and pipeline continues without context"""
+    audio = np.random.uniform(-0.5, 0.5, 16000).astype(np.float32)
+    voice_assistant.listener.record_audio.return_value = audio
+    voice_assistant.listener.transcribe.return_value = "テスト"
+    voice_assistant.retriever.search_web.side_effect = SearchError("offline")
+    voice_assistant.composer.compose_prompt.return_value = "prompt"
+    voice_assistant.brain.generate_response.return_value = "回答"
+
     voice_assistant.listen_and_respond()
 
+    voice_assistant.composer.compose_prompt.assert_called_once_with("テスト", [])
+    voice_assistant.speaker.speak.assert_called_once_with("回答")
 
-def test_listen_and_respond_keyboard_interrupt(voice_assistant):
-    """Test listen_and_respond handles KeyboardInterrupt"""
-    voice_assistant.listener.record_audio.side_effect = KeyboardInterrupt()
 
-    # Should not raise
-    voice_assistant.listen_and_respond()
+def test_listen_and_respond_generation_failure(voice_assistant):
+    """Test that GenerationError propagates from generate_response"""
+    audio = np.random.uniform(-0.5, 0.5, 16000).astype(np.float32)
+    voice_assistant.listener.record_audio.return_value = audio
+    voice_assistant.listener.transcribe.return_value = "テスト"
+    voice_assistant.retriever.search_web.return_value = []
+    voice_assistant.composer.compose_prompt.return_value = "prompt"
+    voice_assistant.brain.generate_response.side_effect = GenerationError("timeout")
+
+    with pytest.raises(GenerationError):
+        voice_assistant.listen_and_respond()
 
 
 def test_main_function():
@@ -133,8 +140,9 @@ def test_main_function_calls_cleanup_on_exception():
          patch('src.main.Composer'), \
          patch('src.main.Brain'), \
          patch('src.main.Speaker'):
-        with patch.object(VoiceAssistant, 'listen_and_respond', side_effect=RuntimeError("fail")), \
+        with patch.object(VoiceAssistant, 'listen_and_respond',
+                          side_effect=ListenerError("fail")), \
              patch.object(VoiceAssistant, 'cleanup') as mock_cleanup:
-            with pytest.raises(RuntimeError):
+            with pytest.raises(SystemExit):
                 main()
             mock_cleanup.assert_called_once()

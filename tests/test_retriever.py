@@ -4,8 +4,10 @@ Tests for retriever module
 """
 
 import pytest
+import requests
 from unittest.mock import Mock, patch
 from src.retriever import Retriever
+from exceptions import SearchError
 
 
 @pytest.fixture
@@ -36,9 +38,17 @@ def test_search_web_success(retriever):
     assert results[0]['title'] == 'Test'
 
 
-def test_search_web_error(retriever):
-    """Test web search with error"""
-    with patch('src.retriever.requests.get', side_effect=Exception("Network error")):
-        results = retriever.search_web("test query")
-    
-    assert results == []
+def test_search_web_connection_error(retriever):
+    """Test web search raises SearchError on connection failure"""
+    with patch('src.retriever.requests.get',
+               side_effect=requests.exceptions.ConnectionError("Connection refused")):
+        with pytest.raises(SearchError, match="Cannot connect to SearXNG"):
+            retriever.search_web("test query")
+
+
+def test_search_web_timeout(retriever):
+    """Test web search raises SearchError on timeout"""
+    with patch('src.retriever.requests.get',
+               side_effect=requests.exceptions.Timeout("timed out")):
+        with pytest.raises(SearchError, match="timed out"):
+            retriever.search_web("test query")

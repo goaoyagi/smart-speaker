@@ -3,11 +3,16 @@
 Speaker module - Text-to-speech using Piper-Plus
 """
 
-from piper import PiperVoice
+import logging
 import subprocess
 import tempfile
 import wave
 import os
+
+from piper import PiperVoice
+from exceptions import SpeakerError
+
+logger = logging.getLogger(__name__)
 
 # Configuration
 SPEAKER_DEVICE = os.getenv("SPEAKER_DEVICE", "plughw:0,0")
@@ -24,30 +29,38 @@ class Speaker:
         )
         self.speaker_device = SPEAKER_DEVICE
         print("Speaker initialized!")
-    
+
     def speak(self, text):
         """Convert text to speech using Piper-Plus"""
-        print(f"Speaking: {text}")
-        
-        # Save to temporary file
+        logger.info("Speaking: %s", text)
+
         with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
             temp_file = f.name
-        
-        # Synthesize audio directly to WAV file
-        with wave.open(temp_file, 'wb') as wav_file:
-            self.piper_model.synthesize(
-                text,
-                wav_file,
-                speaker_id=0,
-                length_scale=1.0
+
+        try:
+            with wave.open(temp_file, 'wb') as wav_file:
+                self.piper_model.synthesize(
+                    text,
+                    wav_file,
+                    speaker_id=0,
+                    length_scale=1.0
+                )
+        except Exception as e:
+            os.unlink(temp_file)
+            raise SpeakerError(f"TTS synthesis failed: {e}") from e
+
+        try:
+            subprocess.run(
+                ['aplay', '-D', self.speaker_device, temp_file],
+                capture_output=True,
+                check=True,
             )
-        
-        # Play audio
-        subprocess.run(
-            ['aplay', '-D', self.speaker_device, temp_file],
-            check=True,
-            capture_output=True,
-        )
-        
-        # Clean up
-        os.unlink(temp_file)
+        except FileNotFoundError as e:
+            raise SpeakerError("aplay command not found") from e
+        except subprocess.CalledProcessError as e:
+            raise SpeakerError(
+                f"Audio playback failed (exit {e.returncode}): "
+                f"{e.stderr.decode(errors='replace').strip()}"
+            ) from e
+        finally:
+            os.unlink(temp_file)
