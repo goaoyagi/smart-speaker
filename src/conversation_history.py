@@ -29,6 +29,19 @@ _REPEAT_KEYWORDS = (
     "リピート",
 )
 
+# Keywords that end the continuous conversation loop.
+_EXIT_KEYWORDS = (
+    "終了",
+    "しゅうりょう",
+    "さようなら",
+    "さよなら",
+    "バイバイ",
+    "ばいばい",
+    "おやすみ",
+    "会話をやめて",
+    "会話を終わって",
+)
+
 
 class ConversationHistory:
     def __init__(self, max_turns=CONVERSATION_MAX_TURNS, answer_clip=CONVERSATION_ANSWER_CLIP,
@@ -63,6 +76,13 @@ class ConversationHistory:
             return False
         normalized = "".join(text.split())
         return any(keyword in normalized for keyword in _REPEAT_KEYWORDS)
+
+    def is_exit_command(self, text):
+        """Return True if the utterance asks to end the conversation loop."""
+        if not text:
+            return False
+        normalized = "".join(text.split())
+        return any(keyword in normalized for keyword in _EXIT_KEYWORDS)
 
     def _clip(self, answer):
         if self._answer_clip > 0 and len(answer) > self._answer_clip:
