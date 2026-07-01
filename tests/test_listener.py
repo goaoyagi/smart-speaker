@@ -3,6 +3,7 @@
 Tests for listener module
 """
 
+import subprocess
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 import numpy as np
@@ -12,6 +13,7 @@ import sys
 sys.modules['faster_whisper'] = MagicMock()
 
 from src.listener import Listener
+from exceptions import ListenerError
 
 
 @pytest.fixture
@@ -41,21 +43,31 @@ def test_transcribe(listener, mock_audio_array):
 def test_record_audio(listener):
     """Test record_audio method"""
     from unittest.mock import MagicMock
-    
-    # Mock wave file operations with proper context manager support
+
     mock_wav_cm = MagicMock()
     mock_wav_file = MagicMock()
     mock_wav_file.getnframes.return_value = 16000
-    mock_wav_file.readframes.return_value = b'\x00' * 32000  # Mock audio data
+    mock_wav_file.readframes.return_value = b'\x00' * 32000
     mock_wav_cm.__enter__.return_value = mock_wav_file
-    
+
     with patch('src.listener.subprocess.run'), \
          patch('src.listener.wave.open', return_value=mock_wav_cm), \
-         patch('src.listener.shutil.copy'), \
          patch('src.listener.os.unlink'), \
          patch('src.listener.tempfile.NamedTemporaryFile') as mock_temp:
         mock_temp.return_value.__enter__.return_value.name = '/tmp/test.wav'
-        
+
         result = listener.record_audio(duration=1)
-        
+
         assert isinstance(result, np.ndarray)
+
+
+def test_record_audio_arecord_failure(listener):
+    """Test record_audio raises ListenerError when arecord fails"""
+    with patch('src.listener.subprocess.run',
+               side_effect=subprocess.CalledProcessError(1, 'arecord', stderr=b'no device')), \
+         patch('src.listener.os.unlink'), \
+         patch('src.listener.tempfile.NamedTemporaryFile') as mock_temp:
+        mock_temp.return_value.__enter__.return_value.name = '/tmp/test.wav'
+
+        with pytest.raises(ListenerError, match="Audio recording failed"):
+            listener.record_audio(duration=1)

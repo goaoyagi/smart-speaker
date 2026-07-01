@@ -3,9 +3,13 @@
 Retriever module - Web search using SearXNG
 """
 
+import logging
 import requests
 import os
 from urllib.parse import urlparse
+from exceptions import SearchError
+
+logger = logging.getLogger(__name__)
 
 # Configuration
 SEARXNG_URL = os.getenv("SEARXNG_URL", "http://localhost:8080")
@@ -25,7 +29,7 @@ class Retriever:
         print("Initializing Retriever (SearXNG)...")
         self.searxng_url = _validate_url(SEARXNG_URL, "SEARXNG_URL")
         print("Retriever initialized!")
-    
+
     def search_web(self, query):
         """Search web using local SearXNG"""
         # Validate and truncate query to prevent abuse
@@ -33,19 +37,19 @@ class Retriever:
             print("Empty or invalid query")
             return []
         query = query.strip()[:500]
-        
+
         print(f"Searching web for: {query}")
-        
+
         params = {
             'q': query,
             'format': 'json',
             'language': 'ja'
         }
-        
+
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
-        
+
         try:
             response = requests.get(
                 f"{self.searxng_url}/search",
@@ -55,19 +59,31 @@ class Retriever:
             )
             response.raise_for_status()
             data = response.json()
-            
-            # Extract search results
-            results = []
-            for result in data.get('results', [])[:5]:  # Top 5 results
-                results.append({
-                    'title': result.get('title', ''),
-                    'content': result.get('content', ''),
-                    'url': result.get('url', '')
-                })
-            
-            print(f"Found {len(results)} results")
-            return results
-            
-        except Exception as e:
-            print(f"Search error: {e}")
-            return []
+        except requests.exceptions.ConnectionError as e:
+            raise SearchError(
+                f"Cannot connect to SearXNG at {self.searxng_url}: {e}"
+            ) from e
+        except requests.exceptions.Timeout as e:
+            raise SearchError(
+                f"SearXNG request timed out: {e}"
+            ) from e
+        except requests.exceptions.HTTPError as e:
+            raise SearchError(
+                f"SearXNG returned an error (HTTP {response.status_code}): {e}"
+            ) from e
+        except (ValueError, requests.exceptions.JSONDecodeError) as e:
+            raise SearchError(
+                f"Invalid JSON response from SearXNG: {e}"
+            ) from e
+
+        # Extract search results
+        results = []
+        for result in data.get('results', [])[:5]:
+            results.append({
+                'title': result.get('title', ''),
+                'content': result.get('content', ''),
+                'url': result.get('url', '')
+            })
+
+        logger.info("Found %d results", len(results))
+        return results

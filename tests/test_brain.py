@@ -4,8 +4,10 @@ Tests for brain module
 """
 
 import pytest
+import requests
 from unittest.mock import Mock, patch
 from src.brain import Brain
+from exceptions import GenerationError
 
 
 @pytest.fixture
@@ -32,9 +34,20 @@ def test_generate_response_success(brain):
     assert result == 'テスト回答'
 
 
-def test_generate_response_error(brain):
-    """Test AI response generation with error"""
-    with patch('src.brain.requests.post', side_effect=Exception("API error")):
-        result = brain.generate_response("テストプロンプト")
-    
-    assert "申し訳ありません" in result
+def test_generate_response_connection_error(brain):
+    """Test AI response generation raises GenerationError on connection failure"""
+    with patch('src.brain.requests.post',
+               side_effect=requests.exceptions.ConnectionError("Connection refused")):
+        with pytest.raises(GenerationError, match="Cannot connect to Ollama"):
+            brain.generate_response("テストプロンプト")
+
+
+def test_generate_response_empty(brain):
+    """Test AI response generation raises GenerationError on empty response"""
+    mock_response = Mock()
+    mock_response.json.return_value = {'response': ''}
+    mock_response.raise_for_status = Mock()
+
+    with patch('src.brain.requests.post', return_value=mock_response):
+        with pytest.raises(GenerationError, match="empty response"):
+            brain.generate_response("テストプロンプト")

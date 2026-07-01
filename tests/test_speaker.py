@@ -3,6 +3,7 @@
 Tests for speaker module
 """
 
+import subprocess
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 import sys
@@ -11,6 +12,7 @@ import sys
 sys.modules['piper'] = MagicMock()
 
 from src.speaker import Speaker
+from exceptions import SpeakerError
 
 
 @pytest.fixture
@@ -31,7 +33,17 @@ def test_speak(speaker):
          patch('src.speaker.wave.open'), \
          patch('src.speaker.subprocess.run'), \
          patch('src.speaker.os.unlink'):
-        
+
         speaker.speak("テスト音声")
-        
-        # Should not raise any exceptions
+
+
+def test_speak_playback_failure(speaker):
+    """Test speak raises SpeakerError when aplay fails"""
+    with patch('src.speaker.tempfile.NamedTemporaryFile'), \
+         patch('src.speaker.wave.open'), \
+         patch('src.speaker.subprocess.run',
+               side_effect=subprocess.CalledProcessError(1, 'aplay', stderr=b'device not found')), \
+         patch('src.speaker.os.unlink'):
+
+        with pytest.raises(SpeakerError, match="Audio playback failed"):
+            speaker.speak("テスト音声")
