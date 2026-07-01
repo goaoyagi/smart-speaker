@@ -3,12 +3,14 @@
 Composer module - RAG prompt composition
 """
 
+from .audio_utils import log_init, log_ready
+
 
 class Composer:
     def __init__(self):
-        print("Initializing Composer...")
-        print("Composer initialized!")
-    
+        log_init("Composer")
+        log_ready("Composer")
+
     def compose_prompt(self, query, search_results):
         """Build prompt with search context (Enforce Japanese-only outputs to keep Piper stable)"""
         if search_results:
@@ -27,5 +29,5 @@ class Composer:
 回答："""
         else:
             prompt = f"質問：{query}\n回答（日本語のみ、アルファベット禁止）："
-        
+
         return prompt
