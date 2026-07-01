@@ -29,6 +29,10 @@ SPEAKER_DEVICE = os.getenv("SPEAKER_DEVICE", "plughw:0,0")
 PIPER_MODEL_PATH = os.getenv("PIPER_MODEL_PATH", "./models/tsukuyomi.onnx")
 PIPER_CONFIG_PATH = os.getenv("PIPER_CONFIG_PATH", "./models/config.json")
 
+# Conversation history (multi-turn dialogue) settings
+CONVERSATION_MAX_TURNS = int(os.getenv("CONVERSATION_MAX_TURNS", "3"))
+CONVERSATION_ANSWER_CLIP = int(os.getenv("CONVERSATION_ANSWER_CLIP", "200"))
+
 # URL validation
 _ALLOWED_SCHEMES = {"http", "https"}
 

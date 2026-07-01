@@ -84,6 +84,65 @@ def test_listen_and_respond_successful_flow(voice_assistant):
     voice_assistant.speaker.speak.assert_called_once_with("今日は晴れです")
 
 
+def test_listen_and_respond_records_history_after_turn(voice_assistant):
+    """A successful turn is appended to the conversation history"""
+    audio = np.full(16000, 0.5, dtype=np.float32)
+    voice_assistant.listener.record_audio.return_value = audio
+    voice_assistant.listener.transcribe.return_value = "今日の天気はどうですか"
+    voice_assistant.retriever.search_web.return_value = []
+    voice_assistant.composer.compose_prompt.return_value = "プロンプト"
+    voice_assistant.brain.generate_response.return_value = "今日は晴れです"
+
+    voice_assistant.listen_and_respond()
+
+    assert voice_assistant.history.last_answer() == "今日は晴れです"
+
+
+def test_listen_and_respond_passes_history_context_to_composer(voice_assistant):
+    """The condensed history is forwarded to compose_prompt on later turns"""
+    voice_assistant.history.add("前の質問", "前の回答")
+
+    audio = np.full(16000, 0.5, dtype=np.float32)
+    voice_assistant.listener.record_audio.return_value = audio
+    voice_assistant.listener.transcribe.return_value = "追加の質問"
+    voice_assistant.retriever.search_web.return_value = []
+    voice_assistant.composer.compose_prompt.return_value = "プロンプト"
+    voice_assistant.brain.generate_response.return_value = "回答"
+
+    voice_assistant.listen_and_respond()
+
+    args = voice_assistant.composer.compose_prompt.call_args[0]
+    # history_context is the 3rd positional arg and should be non-empty
+    assert "前の質問" in args[2]
+
+
+def test_listen_and_respond_repeat_command_respeaks_without_llm(voice_assistant):
+    """A repeat command re-speaks the last answer without search/generation"""
+    voice_assistant.history.add("元の質問", "元の回答です")
+
+    audio = np.full(16000, 0.5, dtype=np.float32)
+    voice_assistant.listener.record_audio.return_value = audio
+    voice_assistant.listener.transcribe.return_value = "もう一回言って"
+
+    voice_assistant.listen_and_respond()
+
+    voice_assistant.retriever.search_web.assert_not_called()
+    voice_assistant.brain.generate_response.assert_not_called()
+    voice_assistant.speaker.speak.assert_called_once_with("元の回答です")
+
+
+def test_listen_and_respond_repeat_command_empty_history(voice_assistant):
+    """A repeat command with no history speaks a fallback message"""
+    audio = np.full(16000, 0.5, dtype=np.float32)
+    voice_assistant.listener.record_audio.return_value = audio
+    voice_assistant.listener.transcribe.return_value = "もう一回言って"
+
+    voice_assistant.listen_and_respond()
+
+    voice_assistant.brain.generate_response.assert_not_called()
+    voice_assistant.speaker.speak.assert_called_once_with("まだお答えできる内容がありません。")
+
+
 def test_listen_and_respond_recording_failure(voice_assistant):
     """Test that ListenerError propagates from record_audio"""
     voice_assistant.listener.record_audio.side_effect = ListenerError("mic broken")
@@ -102,7 +161,7 @@ def test_listen_and_respond_search_failure_degrades_gracefully(voice_assistant):
 
     voice_assistant.listen_and_respond()
 
-    voice_assistant.composer.compose_prompt.assert_called_once_with("テスト", [])
+    voice_assistant.composer.compose_prompt.assert_called_once_with("テスト", [], "")
     voice_assistant.speaker.speak.assert_called_once_with("回答")
 
 
