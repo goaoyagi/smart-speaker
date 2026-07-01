@@ -13,7 +13,7 @@ import sys
 sys.modules['faster_whisper'] = MagicMock()
 
 from src.listener import Listener
-from exceptions import ListenerError
+from src.exceptions import ListenerError
 
 
 @pytest.fixture
@@ -29,21 +29,18 @@ def test_listener_initialization(listener):
 
 def test_transcribe(listener, mock_audio_array):
     """Test transcribe method"""
-    # Mock the transcribe method to return a known result
     mock_segment = Mock(text="テスト")
     mock_info = Mock()
     listener.whisper_model.transcribe = Mock(return_value=(iter([mock_segment]), mock_info))
-    
+
     result = listener.transcribe(mock_audio_array)
-    
+
     assert result == "テスト"
     listener.whisper_model.transcribe.assert_called_once()
 
 
 def test_record_audio(listener):
     """Test record_audio method"""
-    from unittest.mock import MagicMock
-
     mock_wav_cm = MagicMock()
     mock_wav_file = MagicMock()
     mock_wav_file.getnframes.return_value = 16000
@@ -52,9 +49,10 @@ def test_record_audio(listener):
 
     with patch('src.listener.subprocess.run'), \
          patch('src.listener.wave.open', return_value=mock_wav_cm), \
-         patch('src.listener.os.unlink'), \
-         patch('src.listener.tempfile.NamedTemporaryFile') as mock_temp:
-        mock_temp.return_value.__enter__.return_value.name = '/tmp/test.wav'
+         patch('src.audio_utils.os.path.exists', return_value=True), \
+         patch('src.audio_utils.os.unlink'), \
+         patch('src.audio_utils.tempfile.mkstemp', return_value=(3, '/tmp/test.wav')), \
+         patch('src.audio_utils.os.close'):
 
         result = listener.record_audio(duration=1)
 
@@ -65,9 +63,10 @@ def test_record_audio_arecord_failure(listener):
     """Test record_audio raises ListenerError when arecord fails"""
     with patch('src.listener.subprocess.run',
                side_effect=subprocess.CalledProcessError(1, 'arecord', stderr=b'no device')), \
-         patch('src.listener.os.unlink'), \
-         patch('src.listener.tempfile.NamedTemporaryFile') as mock_temp:
-        mock_temp.return_value.__enter__.return_value.name = '/tmp/test.wav'
+         patch('src.audio_utils.os.path.exists', return_value=True), \
+         patch('src.audio_utils.os.unlink'), \
+         patch('src.audio_utils.tempfile.mkstemp', return_value=(3, '/tmp/test.wav')), \
+         patch('src.audio_utils.os.close'):
 
         with pytest.raises(ListenerError, match="Audio recording failed"):
             listener.record_audio(duration=1)

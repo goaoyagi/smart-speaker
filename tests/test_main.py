@@ -13,7 +13,7 @@ sys.modules['faster_whisper'] = MagicMock()
 sys.modules['piper'] = MagicMock()
 
 from src.main import VoiceAssistant, main
-from exceptions import ListenerError, SearchError, GenerationError, SpeakerError
+from src.exceptions import ListenerError, SearchError, GenerationError, SpeakerError
 
 
 @pytest.fixture

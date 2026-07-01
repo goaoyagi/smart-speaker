@@ -4,35 +4,23 @@ Retriever module - Web search using SearXNG
 """
 
 import logging
-import requests
-import os
-from urllib.parse import urlparse
-from exceptions import SearchError
+
+from .config import SEARXNG_URL, validate_url
+from .http_client import http_get_json
+from .audio_utils import log_init, log_ready
+from .exceptions import SearchError
 
 logger = logging.getLogger(__name__)
-
-# Configuration
-SEARXNG_URL = os.getenv("SEARXNG_URL", "http://localhost:8080")
-_ALLOWED_SCHEMES = {"http", "https"}
-
-
-def _validate_url(url, name):
-    """Validate that a URL uses an allowed scheme."""
-    parsed = urlparse(url)
-    if parsed.scheme not in _ALLOWED_SCHEMES:
-        raise ValueError(f"{name} must use http or https (got {parsed.scheme!r})")
-    return url
 
 
 class Retriever:
     def __init__(self):
-        print("Initializing Retriever (SearXNG)...")
-        self.searxng_url = _validate_url(SEARXNG_URL, "SEARXNG_URL")
-        print("Retriever initialized!")
+        log_init("Retriever (SearXNG)")
+        self.searxng_url = validate_url(SEARXNG_URL, "SEARXNG_URL")
+        log_ready("Retriever")
 
     def search_web(self, query):
         """Search web using local SearXNG"""
-        # Validate and truncate query to prevent abuse
         if not isinstance(query, str) or not query.strip():
             print("Empty or invalid query")
             return []
@@ -50,33 +38,15 @@ class Retriever:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
 
-        try:
-            response = requests.get(
-                f"{self.searxng_url}/search",
-                params=params,
-                headers=headers,
-                timeout=10
-            )
-            response.raise_for_status()
-            data = response.json()
-        except requests.exceptions.ConnectionError as e:
-            raise SearchError(
-                f"Cannot connect to SearXNG at {self.searxng_url}: {e}"
-            ) from e
-        except requests.exceptions.Timeout as e:
-            raise SearchError(
-                f"SearXNG request timed out: {e}"
-            ) from e
-        except requests.exceptions.HTTPError as e:
-            raise SearchError(
-                f"SearXNG returned an error (HTTP {response.status_code}): {e}"
-            ) from e
-        except (ValueError, requests.exceptions.JSONDecodeError) as e:
-            raise SearchError(
-                f"Invalid JSON response from SearXNG: {e}"
-            ) from e
+        data = http_get_json(
+            f"{self.searxng_url}/search",
+            error_class=SearchError,
+            service_name="SearXNG",
+            params=params,
+            headers=headers,
+            timeout=10
+        )
 
-        # Extract search results
         results = []
         for result in data.get('results', [])[:5]:
             results.append({

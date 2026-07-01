@@ -5,12 +5,12 @@ Main orchestrator - Coordinates all components for voice assistant
 
 import logging
 import numpy as np
-from listener import Listener
-from retriever import Retriever
-from composer import Composer
-from brain import Brain
-from speaker import Speaker
-from exceptions import (
+from .listener import Listener
+from .retriever import Retriever
+from .composer import Composer
+from .brain import Brain
+from .speaker import Speaker
+from .exceptions import (
     ListenerError,
     SearchError,
     GenerationError,
@@ -23,16 +23,16 @@ logger = logging.getLogger(__name__)
 class VoiceAssistant:
     def __init__(self):
         print("Initializing Voice Assistant...")
-        
+
         # Initialize all components
         self.listener = Listener()
         self.retriever = Retriever()
         self.composer = Composer()
         self.brain = Brain()
         self.speaker = Speaker()
-        
+
         print("Voice Assistant initialized!")
-    
+
     def listen_and_respond(self):
         """Main conversation loop"""
         logger.info("Voice Assistant Ready — Speak now (will record for 10 seconds)...")
@@ -91,7 +91,7 @@ class VoiceAssistant:
             self.speaker.speak(text)
         except SpeakerError as e:
             logger.warning("Could not speak error message: %s", e)
-    
+
     def cleanup(self):
         """Clean up resources"""
         pass
