@@ -22,7 +22,7 @@ def speaker():
 def test_speaker_initialization(speaker):
     """Test that Speaker initializes correctly"""
     assert speaker.piper_model is not None
-    assert speaker.speaker_device == "plughw:2,0"
+    assert speaker.speaker_device == "plughw:0,0"
 
 
 def test_speak(speaker):
