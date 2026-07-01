@@ -62,9 +62,12 @@ class Listener:
             if max_level < 0.01:
                 print("Warning: Audio level is very low. Microphone may not be working.")
         
-        # Save a copy for analysis
-        shutil.copy(temp_file, "/home/gopi/smart-speaker/last_record.wav")
-        print("Saved a copy of record to /home/gopi/smart-speaker/last_record.wav")
+        # Save a copy for analysis (project-relative path)
+        debug_dir = os.getenv("DEBUG_AUDIO_DIR", "")
+        if debug_dir:
+            debug_path = os.path.join(debug_dir, "last_record.wav")
+            shutil.copy(temp_file, debug_path)
+            print(f"Saved a copy of record to {debug_path}")
         
         # Clean up
         os.unlink(temp_file)

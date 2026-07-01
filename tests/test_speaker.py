@@ -29,7 +29,7 @@ def test_speak(speaker):
     """Test speak method"""
     with patch('src.speaker.tempfile.NamedTemporaryFile'), \
          patch('src.speaker.wave.open'), \
-         patch('src.speaker.os.system'), \
+         patch('src.speaker.subprocess.run'), \
          patch('src.speaker.os.unlink'):
         
         speaker.speak("テスト音声")

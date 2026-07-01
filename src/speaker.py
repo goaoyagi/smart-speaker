@@ -4,6 +4,7 @@ Speaker module - Text-to-speech using Piper-Plus
 """
 
 from piper import PiperVoice
+import subprocess
 import tempfile
 import wave
 import os
@@ -42,7 +43,11 @@ class Speaker:
             )
         
         # Play audio
-        os.system(f"aplay -D {self.speaker_device} {temp_file}")
+        subprocess.run(
+            ['aplay', '-D', self.speaker_device, temp_file],
+            check=True,
+            capture_output=True,
+        )
         
         # Clean up
         os.unlink(temp_file)
