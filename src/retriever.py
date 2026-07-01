@@ -5,19 +5,35 @@ Retriever module - Web search using SearXNG
 
 import requests
 import os
+from urllib.parse import urlparse
 
 # Configuration
 SEARXNG_URL = os.getenv("SEARXNG_URL", "http://localhost:8080")
+_ALLOWED_SCHEMES = {"http", "https"}
+
+
+def _validate_url(url, name):
+    """Validate that a URL uses an allowed scheme."""
+    parsed = urlparse(url)
+    if parsed.scheme not in _ALLOWED_SCHEMES:
+        raise ValueError(f"{name} must use http or https (got {parsed.scheme!r})")
+    return url
 
 
 class Retriever:
     def __init__(self):
         print("Initializing Retriever (SearXNG)...")
-        self.searxng_url = SEARXNG_URL
+        self.searxng_url = _validate_url(SEARXNG_URL, "SEARXNG_URL")
         print("Retriever initialized!")
     
     def search_web(self, query):
         """Search web using local SearXNG"""
+        # Validate and truncate query to prevent abuse
+        if not isinstance(query, str) or not query.strip():
+            print("Empty or invalid query")
+            return []
+        query = query.strip()[:500]
+        
         print(f"Searching web for: {query}")
         
         params = {
