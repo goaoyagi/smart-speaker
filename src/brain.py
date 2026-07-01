@@ -46,3 +46,38 @@ class Brain:
 
         logger.info("AI Response: %s", answer)
         return answer
+
+    def summarize_history(self, history_text):
+        """Compress prior conversation turns into a short Japanese summary.
+
+        Used for LLM-based history condensation. Raises GenerationError on
+        failure so callers can fall back to the raw (template) context.
+        """
+        if not isinstance(history_text, str) or not history_text.strip():
+            return ""
+
+        prompt = (
+            "以下はユーザーとアシスタントの過去の会話です。"
+            "次の質問の文脈として使えるよう、要点のみを日本語で簡潔に要約してください。"
+            "アルファベットは使わないでください。\n\n"
+            f"{history_text[:10000]}\n\n要約："
+        )
+
+        data = http_post_json(
+            self.ollama_api_url,
+            error_class=GenerationError,
+            service_name="Ollama",
+            json_body={
+                'model': self.ollama_model,
+                'prompt': prompt,
+                'stream': False
+            },
+            timeout=120
+        )
+
+        summary = data.get('response', '').strip()
+        if not summary:
+            raise GenerationError("Ollama returned an empty summary")
+
+        logger.info("History summary: %s", summary)
+        return summary

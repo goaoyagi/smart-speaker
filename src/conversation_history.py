@@ -12,9 +12,12 @@ retained turns into a short, prompt-friendly summary (Condense Question) with
 each answer clipped to keep the prompt length bounded.
 """
 
+import logging
 from collections import deque
 
 from .config import CONVERSATION_MAX_TURNS, CONVERSATION_ANSWER_CLIP
+
+logger = logging.getLogger(__name__)
 
 # Keywords that trigger re-speaking the previous answer.
 _REPEAT_KEYWORDS = (
@@ -28,9 +31,13 @@ _REPEAT_KEYWORDS = (
 
 
 class ConversationHistory:
-    def __init__(self, max_turns=CONVERSATION_MAX_TURNS, answer_clip=CONVERSATION_ANSWER_CLIP):
+    def __init__(self, max_turns=CONVERSATION_MAX_TURNS, answer_clip=CONVERSATION_ANSWER_CLIP,
+                 summarizer=None):
         self._turns = deque(maxlen=max_turns)
         self._answer_clip = answer_clip
+        # Optional callable(str) -> str for LLM-based condensation. When None,
+        # the raw template context is used. Failures fall back to the template.
+        self._summarizer = summarizer
 
     def add(self, query, answer):
         """Record a completed (query, answer) turn."""
@@ -62,15 +69,30 @@ class ConversationHistory:
             return answer[: self._answer_clip] + "…"
         return answer
 
-    def as_condensed_context(self):
-        """Render retained turns into a short summary string for the prompt.
-
-        Returns an empty string when there is no history, so callers can embed
-        the result unconditionally.
-        """
-        if not self._turns:
-            return ""
+    def _template_context(self):
         lines = []
         for query, answer in self._turns:
             lines.append(f"ユーザーは「{query}」と質問し、「{self._clip(answer)}」と回答された。")
         return "\n".join(lines)
+
+    def as_condensed_context(self):
+        """Render retained turns into a short summary string for the prompt.
+
+        Returns an empty string when there is no history, so callers can embed
+        the result unconditionally. When a summarizer is configured it is used
+        to compress the history; if it fails, we fall back to the raw template.
+        """
+        if not self._turns:
+            return ""
+
+        template = self._template_context()
+        if self._summarizer is None:
+            return template
+
+        try:
+            summary = self._summarizer(template)
+        except Exception as e:
+            logger.warning("History summarization failed, using raw context: %s", e)
+            return template
+
+        return summary.strip() if summary and summary.strip() else template

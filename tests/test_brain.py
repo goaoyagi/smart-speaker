@@ -63,3 +63,34 @@ def test_generate_response_none_prompt(brain):
     """Test AI response generation with None prompt"""
     result = brain.generate_response(None)
     assert "質問が空です" in result
+
+
+def test_summarize_history_success(brain):
+    """Test successful history summarization"""
+    mock_response = Mock()
+    mock_response.json.return_value = {'response': '要約されたテキスト'}
+    mock_response.raise_for_status = Mock()
+
+    with patch('src.http_client.requests.post', return_value=mock_response):
+        result = brain.summarize_history("ユーザーは天気を質問し晴れと回答された。")
+
+    assert result == '要約されたテキスト'
+
+
+def test_summarize_history_empty_input(brain):
+    """Empty history returns empty string without calling Ollama"""
+    with patch('src.http_client.requests.post') as mock_post:
+        result = brain.summarize_history("")
+    assert result == ""
+    mock_post.assert_not_called()
+
+
+def test_summarize_history_empty_response(brain):
+    """Empty summary from Ollama raises GenerationError"""
+    mock_response = Mock()
+    mock_response.json.return_value = {'response': ''}
+    mock_response.raise_for_status = Mock()
+
+    with patch('src.http_client.requests.post', return_value=mock_response):
+        with pytest.raises(GenerationError, match="empty summary"):
+            brain.summarize_history("何らかの履歴")
