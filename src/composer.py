@@ -21,29 +21,25 @@ class Composer:
         """
         history_block = ""
         if history_summary:
-            history_block = f"""これまでの会話履歴：
-{history_summary}
-
-"""
+            history_block = f"これまでの会話履歴：\n{history_summary}"
 
         if search_results:
             context = "\n".join([
                 f"- {r['title']}: {r['content']}"
                 for r in search_results
             ])
+            history_section = f"{history_block}\n\n" if history_block else ""
             prompt = f"""以下の検索結果を『絶対に事実』として扱い、ユーザーの質問に日本語のみで答えなさい。
 回答にはアルファベット（英語の単語や文）を含めず、必要であればカタカナや日本語表現に翻訳して出力してください。
 
-{history_block}検索結果：
+{history_section}検索結果：
 {context}
 
 質問：{query}
 
 回答："""
         else:
-            if history_block:
-                prompt = f"{history_block}質問：{query}\n回答（日本語のみ、アルファベット禁止）："
-            else:
-                prompt = f"質問：{query}\n回答（日本語のみ、アルファベット禁止）："
+            prefix = f"{history_block}\n\n" if history_block else ""
+            prompt = f"{prefix}質問：{query}\n回答（日本語のみ、アルファベット禁止）："
 
         return prompt

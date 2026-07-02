@@ -117,7 +117,7 @@ def test_listen_and_respond_passes_history_to_composer(voice_assistant):
     voice_assistant.listen_and_respond()
 
     call_args = voice_assistant.composer.compose_prompt.call_args
-    history_summary_arg = call_args[0][2] if len(call_args[0]) > 2 else call_args[1].get("history_summary", "")
+    history_summary_arg = call_args.args[2]
     assert "前の質問" in history_summary_arg
     assert "前の回答" in history_summary_arg
 
