@@ -70,7 +70,11 @@ class VoiceAssistant:
                 logger.info("Repeat command detected; re-speaking previous answer.")
             else:
                 logger.info("Repeat command detected but history is empty.")
-            self._safe_speak(last or "まだお答えできる内容がありません。")
+            try:
+                self.speaker.speak(last or "まだお答えできる内容がありません。")
+            except SpeakerError as e:
+                logger.error("Speech output failed: %s", e)
+                raise
             return
 
         # --- Web search (non-fatal: degrade to no-context prompt) ---
