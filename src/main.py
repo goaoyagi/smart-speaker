@@ -10,6 +10,7 @@ from .retriever import Retriever
 from .composer import Composer
 from .brain import Brain
 from .speaker import Speaker
+from .conversation_history import ConversationHistory
 from .exceptions import (
     ListenerError,
     SearchError,
@@ -30,6 +31,7 @@ class VoiceAssistant:
         self.composer = Composer()
         self.brain = Brain()
         self.speaker = Speaker()
+        self.history = ConversationHistory()
 
         print("Voice Assistant initialized!")
 
@@ -61,6 +63,15 @@ class VoiceAssistant:
             logger.info("No speech detected.")
             return
 
+        # --- Handle repeat request ---
+        if self.history.is_repeat_request(text):
+            last = self.history.get_last_response()
+            if last:
+                logger.info("Repeat request detected — replaying last response.")
+                self._safe_speak(last)
+                return
+            logger.info("Repeat request detected but history is empty.")
+
         # --- Web search (non-fatal: degrade to no-context prompt) ---
         try:
             search_results = self.retriever.search_web(text)
@@ -69,7 +80,8 @@ class VoiceAssistant:
             search_results = []
 
         # --- Compose & generate ---
-        prompt = self.composer.compose_prompt(text, search_results)
+        history_summary = self.history.format_history_summary()
+        prompt = self.composer.compose_prompt(text, search_results, history_summary)
 
         try:
             response = self.brain.generate_response(prompt)
@@ -84,6 +96,9 @@ class VoiceAssistant:
         except SpeakerError as e:
             logger.error("Speech output failed: %s", e)
             raise
+
+        # --- Save turn to history ---
+        self.history.add_turn(text, response)
 
     def _safe_speak(self, text):
         """Attempt to speak; log and continue if it fails."""

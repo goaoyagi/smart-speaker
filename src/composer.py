@@ -11,8 +11,21 @@ class Composer:
         log_init("Composer")
         log_ready("Composer")
 
-    def compose_prompt(self, query, search_results):
-        """Build prompt with search context (Enforce Japanese-only outputs to keep Piper stable)"""
+    def compose_prompt(self, query, search_results, history_summary=""):
+        """Build prompt with search context (Enforce Japanese-only outputs to keep Piper stable).
+
+        Args:
+            query: The user's current question.
+            search_results: List of dicts with 'title' and 'content' keys.
+            history_summary: Optional condensed text of prior conversation turns.
+        """
+        history_block = ""
+        if history_summary:
+            history_block = f"""これまでの会話履歴：
+{history_summary}
+
+"""
+
         if search_results:
             context = "\n".join([
                 f"- {r['title']}: {r['content']}"
@@ -21,13 +34,16 @@ class Composer:
             prompt = f"""以下の検索結果を『絶対に事実』として扱い、ユーザーの質問に日本語のみで答えなさい。
 回答にはアルファベット（英語の単語や文）を含めず、必要であればカタカナや日本語表現に翻訳して出力してください。
 
-検索結果：
+{history_block}検索結果：
 {context}
 
 質問：{query}
 
 回答："""
         else:
-            prompt = f"質問：{query}\n回答（日本語のみ、アルファベット禁止）："
+            if history_block:
+                prompt = f"{history_block}質問：{query}\n回答（日本語のみ、アルファベット禁止）："
+            else:
+                prompt = f"質問：{query}\n回答（日本語のみ、アルファベット禁止）："
 
         return prompt
