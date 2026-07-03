@@ -28,6 +28,13 @@ def voice_assistant():
         return assistant
 
 
+@pytest.fixture
+def voice_assistant_with_history(voice_assistant):
+    """VoiceAssistant pre-loaded with one history turn"""
+    voice_assistant.history.add("前の質問", "前の回答")
+    return voice_assistant
+
+
 def test_voice_assistant_initialization(voice_assistant):
     """Test that VoiceAssistant initializes all components"""
     assert voice_assistant.listener is not None
@@ -35,6 +42,7 @@ def test_voice_assistant_initialization(voice_assistant):
     assert voice_assistant.composer is not None
     assert voice_assistant.brain is not None
     assert voice_assistant.speaker is not None
+    assert voice_assistant.history is not None
 
 
 def test_cleanup(voice_assistant):
@@ -84,6 +92,68 @@ def test_listen_and_respond_successful_flow(voice_assistant):
     voice_assistant.speaker.speak.assert_called_once_with("今日は晴れです")
 
 
+def test_listen_and_respond_stores_history(voice_assistant):
+    """Completed turn should be added to conversation history"""
+    audio = np.full(16000, 0.5, dtype=np.float32)
+    voice_assistant.listener.record_audio.return_value = audio
+    voice_assistant.listener.transcribe.return_value = "質問"
+    voice_assistant.retriever.search_web.return_value = []
+    voice_assistant.composer.compose_prompt.return_value = "prompt"
+    voice_assistant.brain.generate_response.return_value = "回答"
+
+    assert voice_assistant.history.is_empty()
+    voice_assistant.listen_and_respond()
+
+    turns = voice_assistant.history.get_history()
+    assert len(turns) == 1
+    assert turns[0] == {"question": "質問", "answer": "回答"}
+
+
+def test_listen_and_respond_history_passed_to_composer(voice_assistant_with_history):
+    """Existing history text is forwarded to compose_prompt"""
+    audio = np.full(16000, 0.5, dtype=np.float32)
+    voice_assistant_with_history.listener.record_audio.return_value = audio
+    voice_assistant_with_history.listener.transcribe.return_value = "新しい質問"
+    voice_assistant_with_history.retriever.search_web.return_value = []
+    voice_assistant_with_history.composer.compose_prompt.return_value = "prompt"
+    voice_assistant_with_history.brain.generate_response.return_value = "新しい回答"
+
+    voice_assistant_with_history.listen_and_respond()
+
+    call_kwargs = voice_assistant_with_history.composer.compose_prompt.call_args
+    history_arg = call_kwargs[1].get("history_text") or (
+        call_kwargs[0][2] if len(call_kwargs[0]) > 2 else ""
+    )
+    assert "前の質問" in history_arg
+    assert "前の回答" in history_arg
+
+
+def test_listen_and_respond_repeat_command_with_history(voice_assistant_with_history):
+    """'もう一回言って' should replay the last answer without calling the LLM"""
+    audio = np.full(16000, 0.5, dtype=np.float32)
+    voice_assistant_with_history.listener.record_audio.return_value = audio
+    voice_assistant_with_history.listener.transcribe.return_value = "もう一回言って"
+
+    voice_assistant_with_history.listen_and_respond()
+
+    voice_assistant_with_history.brain.generate_response.assert_not_called()
+    voice_assistant_with_history.speaker.speak.assert_called_once_with("前の回答")
+
+
+def test_listen_and_respond_repeat_command_no_history(voice_assistant):
+    """Repeat command with empty history should inform the user"""
+    audio = np.full(16000, 0.5, dtype=np.float32)
+    voice_assistant.listener.record_audio.return_value = audio
+    voice_assistant.listener.transcribe.return_value = "もう一回言って"
+
+    voice_assistant.listen_and_respond()
+
+    voice_assistant.brain.generate_response.assert_not_called()
+    voice_assistant.speaker.speak.assert_called_once()
+    spoken = voice_assistant.speaker.speak.call_args[0][0]
+    assert "履歴" in spoken
+
+
 def test_listen_and_respond_recording_failure(voice_assistant):
     """Test that ListenerError propagates from record_audio"""
     voice_assistant.listener.record_audio.side_effect = ListenerError("mic broken")
@@ -102,7 +172,9 @@ def test_listen_and_respond_search_failure_degrades_gracefully(voice_assistant):
 
     voice_assistant.listen_and_respond()
 
-    voice_assistant.composer.compose_prompt.assert_called_once_with("テスト", [])
+    call_args = voice_assistant.composer.compose_prompt.call_args
+    assert call_args[0][0] == "テスト"
+    assert call_args[0][1] == []
     voice_assistant.speaker.speak.assert_called_once_with("回答")
 
 
