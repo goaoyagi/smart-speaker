@@ -10,6 +10,7 @@ from .retriever import Retriever
 from .composer import Composer
 from .brain import Brain
 from .speaker import Speaker
+from .conversation_history import ConversationHistory
 from .exceptions import (
     ListenerError,
     SearchError,
@@ -30,6 +31,7 @@ class VoiceAssistant:
         self.composer = Composer()
         self.brain = Brain()
         self.speaker = Speaker()
+        self.history = ConversationHistory()
 
         print("Voice Assistant initialized!")
 
@@ -69,7 +71,7 @@ class VoiceAssistant:
             search_results = []
 
         # --- Compose & generate ---
-        prompt = self.composer.compose_prompt(text, search_results)
+        prompt = self.composer.compose_prompt(text, search_results, self.history)
 
         try:
             response = self.brain.generate_response(prompt)
@@ -77,6 +79,9 @@ class VoiceAssistant:
             logger.error("AI generation failed: %s", e)
             self._safe_speak("申し訳ありませんが、回答を生成できませんでした。")
             raise
+
+        # --- Store turn in history ---
+        self.history.add_turn(text, response)
 
         # --- Speak ---
         try:
