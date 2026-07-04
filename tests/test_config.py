@@ -24,6 +24,10 @@ def test_default_config_values():
     assert config.PIPER_MODEL_PATH == "./models/tsukuyomi.onnx"
     assert config.PIPER_CONFIG_PATH == "./models/config.json"
     assert config.DEBUG_AUDIO_DIR == ""
+    assert isinstance(config.WAKE_WORDS, list)
+    assert len(config.WAKE_WORDS) > 0
+    assert config.WAKE_WORD_RECORD_SECONDS == 3
+    assert config.SILENCE_THRESHOLD == 0.03
 
 
 def test_config_reads_environment(monkeypatch):
@@ -40,6 +44,33 @@ def test_config_reads_environment(monkeypatch):
     # Reset
     monkeypatch.delenv("SEARXNG_URL")
     monkeypatch.delenv("OLLAMA_MODEL")
+    importlib.reload(src.config)
+
+
+def test_wake_words_config_from_env(monkeypatch):
+    """WAKE_WORDS should be parsed from the WAKE_WORDS env variable."""
+    monkeypatch.setenv("WAKE_WORDS", "ハロー,ねえ")
+
+    import src.config
+    importlib.reload(src.config)
+
+    assert "ハロー" in src.config.WAKE_WORDS
+    assert "ねえ" in src.config.WAKE_WORDS
+
+    monkeypatch.delenv("WAKE_WORDS")
+    importlib.reload(src.config)
+
+
+def test_wake_word_record_seconds_from_env(monkeypatch):
+    """WAKE_WORD_RECORD_SECONDS should be read from the environment."""
+    monkeypatch.setenv("WAKE_WORD_RECORD_SECONDS", "5")
+
+    import src.config
+    importlib.reload(src.config)
+
+    assert src.config.WAKE_WORD_RECORD_SECONDS == 5
+
+    monkeypatch.delenv("WAKE_WORD_RECORD_SECONDS")
     importlib.reload(src.config)
 
 

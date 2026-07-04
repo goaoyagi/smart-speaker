@@ -29,6 +29,18 @@ SPEAKER_DEVICE = os.getenv("SPEAKER_DEVICE", "plughw:0,0")
 PIPER_MODEL_PATH = os.getenv("PIPER_MODEL_PATH", "./models/tsukuyomi.onnx")
 PIPER_CONFIG_PATH = os.getenv("PIPER_CONFIG_PATH", "./models/config.json")
 
+# Wake word detection settings
+# Comma-separated list of keywords that trigger the full conversation pipeline.
+# Example: WAKE_WORDS="オッケースピーカー,ねえスピーカー"
+_WAKE_WORDS_RAW = os.getenv("WAKE_WORDS", "オッケースピーカー,ねえスピーカー")
+WAKE_WORDS: list = [w.strip() for w in _WAKE_WORDS_RAW.split(",") if w.strip()]
+
+# Duration (seconds) of the short listen window used to check for the wake word.
+WAKE_WORD_RECORD_SECONDS = int(os.getenv("WAKE_WORD_RECORD_SECONDS", "3"))
+
+# Minimum audio level (absolute peak) below which audio is treated as silence.
+SILENCE_THRESHOLD = float(os.getenv("SILENCE_THRESHOLD", "0.03"))
+
 # URL validation
 _ALLOWED_SCHEMES = {"http", "https"}
 

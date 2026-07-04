@@ -10,6 +10,8 @@ from .retriever import Retriever
 from .composer import Composer
 from .brain import Brain
 from .speaker import Speaker
+from .wake_word import WakeWordDetector
+from .config import WAKE_WORD_RECORD_SECONDS, SILENCE_THRESHOLD
 from .exceptions import (
     ListenerError,
     SearchError,
@@ -30,6 +32,7 @@ class VoiceAssistant:
         self.composer = Composer()
         self.brain = Brain()
         self.speaker = Speaker()
+        self.wake_word_detector = WakeWordDetector()
 
         print("Voice Assistant initialized!")
 
@@ -45,7 +48,7 @@ class VoiceAssistant:
             raise
 
         max_level = np.max(np.abs(audio_array))
-        if max_level < 0.03:
+        if max_level < SILENCE_THRESHOLD:
             logger.info("No speech detected (audio level too low: %.4f).", max_level)
             self._safe_speak("音声が検出されませんでした。")
             return
@@ -85,6 +88,52 @@ class VoiceAssistant:
             logger.error("Speech output failed: %s", e)
             raise
 
+    def run_continuous(self):
+        """Continuous standby loop: wait for a wake word then handle a turn.
+
+        The loop records a short audio clip, transcribes it, and checks for
+        the configured wake words.  When a wake word is detected the full
+        :meth:`listen_and_respond` pipeline is invoked.
+
+        The loop runs until interrupted by :exc:`KeyboardInterrupt`.
+        Non-fatal errors (recording, transcription, or pipeline failures) are
+        logged and the loop continues rather than crashing.
+        """
+        logger.info(
+            "Continuous mode active — listening for wake words: %s",
+            self.wake_word_detector.wake_words,
+        )
+
+        while True:
+            # --- Short listen for wake word ---
+            try:
+                audio_array = self.listener.record_audio(
+                    duration=WAKE_WORD_RECORD_SECONDS
+                )
+            except ListenerError as e:
+                logger.warning("Wake word recording failed, retrying: %s", e)
+                continue
+
+            max_level = np.max(np.abs(audio_array))
+            if max_level < SILENCE_THRESHOLD:
+                continue
+
+            try:
+                text = self.listener.transcribe(audio_array)
+            except ListenerError as e:
+                logger.warning("Wake word transcription failed, retrying: %s", e)
+                continue
+
+            if not self.wake_word_detector.detect(text):
+                continue
+
+            logger.info("Wake word triggered — starting conversation.")
+            try:
+                self.listen_and_respond()
+            except (ListenerError, GenerationError, SpeakerError) as e:
+                logger.error("Conversation pipeline error: %s", e)
+                self._safe_speak("エラーが発生しました。もう一度お試しください。")
+
     def _safe_speak(self, text):
         """Attempt to speak; log and continue if it fails."""
         try:
@@ -110,12 +159,9 @@ def main():
         raise SystemExit(1) from e
 
     try:
-        assistant.listen_and_respond()
+        assistant.run_continuous()
     except KeyboardInterrupt:
         logger.info("Interrupted by user.")
-    except (ListenerError, SearchError, GenerationError, SpeakerError) as e:
-        logger.error("Pipeline error: %s", e)
-        raise SystemExit(1) from e
     finally:
         assistant.cleanup()
 
