@@ -9,6 +9,7 @@
 3. **[構成] composer.py**: 検索結果（事実ソース）と質問をプロンプトに編成
 4. **[脳] brain.py**: プロンプトを Ollama（Qwen2.5:3b）に投入し、事実に基づく回答を生成
 5. **[口] speaker.py**: `piper-tts-plus` で音声合成して発話
+6. **[視覚] status_led.py**: GPIO接続のLEDで、待機・聞き取り・検索・思考・発話・エラーを表示
 
 ## 必要依存ライブラリ
 
@@ -100,4 +101,5 @@ smart-speaker/
 ## 注意点
 
 - **speaker.py**: 本家Piper（espeak-ng依存）は日本語のアクセント解析が未対応のため、必ず `piper-tts-plus` を使用すること
+- **status_led.py**: `gpiozero` は Raspberry Pi 上でのみ動作するため、非Pi環境では自動的に無効化される
 - **テスト実行時**: 外部API（SearXNG/Ollama）にリクエストを飛ばさず、`pytest-mock` でモック化すること
