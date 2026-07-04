@@ -31,7 +31,7 @@ PIPER_CONFIG_PATH = os.getenv("PIPER_CONFIG_PATH", "./models/config.json")
 
 # Status LED (GPIO) settings
 STATUS_LED_ENABLED = os.getenv("STATUS_LED_ENABLED", "true").lower() in ("1", "true", "yes")
-STATUS_LED_PIN = int(os.getenv("STATUS_LED_PIN", "17"))
+STATUS_LED_PIN = int(os.getenv("STATUS_LED_PIN", "23"))
 
 # URL validation
 _ALLOWED_SCHEMES = {"http", "https"}

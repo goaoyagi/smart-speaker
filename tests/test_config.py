@@ -24,7 +24,7 @@ def test_default_config_values():
     assert config.PIPER_MODEL_PATH == "./models/tsukuyomi.onnx"
     assert config.PIPER_CONFIG_PATH == "./models/config.json"
     assert config.STATUS_LED_ENABLED is True
-    assert config.STATUS_LED_PIN == 17
+    assert config.STATUS_LED_PIN == 23
     assert config.DEBUG_AUDIO_DIR == ""
 
 
