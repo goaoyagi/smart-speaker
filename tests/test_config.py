@@ -23,6 +23,8 @@ def test_default_config_values():
     assert config.SPEAKER_DEVICE == "plughw:0,0"
     assert config.PIPER_MODEL_PATH == "./models/tsukuyomi.onnx"
     assert config.PIPER_CONFIG_PATH == "./models/config.json"
+    assert config.STATUS_LED_ENABLED is True
+    assert config.STATUS_LED_PIN == 17
     assert config.DEBUG_AUDIO_DIR == ""
 
 
@@ -30,16 +32,22 @@ def test_config_reads_environment(monkeypatch):
     """Test that config respects environment variables"""
     monkeypatch.setenv("SEARXNG_URL", "http://custom:9090")
     monkeypatch.setenv("OLLAMA_MODEL", "llama3:8b")
+    monkeypatch.setenv("STATUS_LED_ENABLED", "false")
+    monkeypatch.setenv("STATUS_LED_PIN", "21")
 
     import src.config
     importlib.reload(src.config)
 
     assert src.config.SEARXNG_URL == "http://custom:9090"
     assert src.config.OLLAMA_MODEL == "llama3:8b"
+    assert src.config.STATUS_LED_ENABLED is False
+    assert src.config.STATUS_LED_PIN == 21
 
     # Reset
     monkeypatch.delenv("SEARXNG_URL")
     monkeypatch.delenv("OLLAMA_MODEL")
+    monkeypatch.delenv("STATUS_LED_ENABLED")
+    monkeypatch.delenv("STATUS_LED_PIN")
     importlib.reload(src.config)
 
 
