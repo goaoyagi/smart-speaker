@@ -83,3 +83,49 @@ def test_compose_prompt_with_results_and_history(composer, mock_search_results):
     assert "以前の質問" in prompt
     assert "検索結果" in prompt
     assert "今日の天気" in prompt
+
+
+# ---------------------------------------------------------------------------
+# Phase B: history_text parameter (LLM summary injection)
+# ---------------------------------------------------------------------------
+
+def test_compose_prompt_with_history_text(composer):
+    """history_text should be injected into the prompt."""
+    summary = "ユーザーは天気と気温について話した。"
+    prompt = composer.compose_prompt("明日は？", [], history_text=summary)
+    assert summary in prompt
+    assert "会話履歴" in prompt
+
+
+def test_compose_prompt_history_text_overrides_history_object(composer):
+    """When history_text is provided, the ConversationHistory object is ignored."""
+    history = ConversationHistory()
+    history.add_turn("古い質問", "古い回答")
+    summary = "LLM要約テキスト"
+
+    prompt = composer.compose_prompt("質問", [], history=history, history_text=summary)
+
+    assert summary in prompt
+    assert "古い質問" not in prompt
+
+
+def test_compose_prompt_empty_history_text_treated_as_no_history(composer):
+    """Blank history_text should behave the same as no history."""
+    prompt_no_history = composer.compose_prompt("質問", [])
+    prompt_blank_summary = composer.compose_prompt("質問", [], history_text="")
+    assert prompt_no_history == prompt_blank_summary
+
+
+def test_compose_prompt_history_text_precedes_question(composer):
+    """LLM summary block should appear before the current question."""
+    summary = "過去の要約"
+    prompt = composer.compose_prompt("現在の質問", [], history_text=summary)
+    assert prompt.index(summary) < prompt.index("現在の質問")
+
+
+def test_compose_prompt_history_text_with_search_results(composer, mock_search_results):
+    """LLM summary should coexist with search results."""
+    summary = "要約テキスト"
+    prompt = composer.compose_prompt("質問", mock_search_results, history_text=summary)
+    assert summary in prompt
+    assert "検索結果" in prompt

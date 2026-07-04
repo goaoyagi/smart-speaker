@@ -14,6 +14,7 @@ sys.modules['piper'] = MagicMock()
 
 from src.main import VoiceAssistant, main
 from src.conversation_history import ConversationHistory
+from src.history_summarizer import HistorySummarizer
 from src.exceptions import ListenerError, SearchError, GenerationError, SpeakerError
 
 
@@ -217,3 +218,76 @@ def test_main_function_calls_cleanup_on_exception():
             with pytest.raises(SystemExit):
                 main()
             mock_cleanup.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Phase B: LLM-based history summarization
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def voice_assistant_with_summary():
+    """Create VoiceAssistant with use_llm_summary=True and mocked components."""
+    with patch('src.main.Listener'), \
+         patch('src.main.Retriever'), \
+         patch('src.main.Composer'), \
+         patch('src.main.Brain'), \
+         patch('src.main.Speaker'):
+        assistant = VoiceAssistant(use_llm_summary=True)
+        return assistant
+
+
+def test_use_llm_summary_creates_summarizer(voice_assistant_with_summary):
+    """When use_llm_summary=True, a HistorySummarizer should be attached."""
+    assert isinstance(voice_assistant_with_summary._summarizer, HistorySummarizer)
+
+
+def test_no_llm_summary_by_default(voice_assistant):
+    """Default VoiceAssistant should have no summarizer."""
+    assert voice_assistant._summarizer is None
+
+
+def test_llm_summary_calls_summarizer_on_respond(voice_assistant_with_summary):
+    """With LLM summary enabled, summarize() should be called before compose_prompt."""
+    audio = np.full(16000, 0.5, dtype=np.float32)
+    va = voice_assistant_with_summary
+    va.listener.record_audio.return_value = audio
+    va.listener.transcribe.return_value = "質問"
+    va.retriever.search_web.return_value = []
+    va.composer.compose_prompt.return_value = "prompt"
+    va.brain.generate_response.return_value = "回答"
+
+    with patch.object(va._summarizer, 'summarize', return_value="要約") as mock_sum:
+        va.listen_and_respond()
+        mock_sum.assert_called_once_with(va.history)
+
+
+def test_llm_summary_passes_history_text_to_composer(voice_assistant_with_summary):
+    """With LLM summary enabled, history_text= kwarg should be passed to compose_prompt."""
+    audio = np.full(16000, 0.5, dtype=np.float32)
+    va = voice_assistant_with_summary
+    va.listener.record_audio.return_value = audio
+    va.listener.transcribe.return_value = "質問"
+    va.retriever.search_web.return_value = []
+    va.composer.compose_prompt.return_value = "prompt"
+    va.brain.generate_response.return_value = "回答"
+
+    with patch.object(va._summarizer, 'summarize', return_value="要約テキスト"):
+        va.listen_and_respond()
+
+    call_kwargs = va.composer.compose_prompt.call_args[1]
+    assert call_kwargs.get("history_text") == "要約テキスト"
+
+
+def test_no_llm_summary_passes_history_object_to_composer(voice_assistant):
+    """Without LLM summary, the ConversationHistory object should be passed positionally."""
+    audio = np.full(16000, 0.5, dtype=np.float32)
+    voice_assistant.listener.record_audio.return_value = audio
+    voice_assistant.listener.transcribe.return_value = "質問"
+    voice_assistant.retriever.search_web.return_value = []
+    voice_assistant.composer.compose_prompt.return_value = "prompt"
+    voice_assistant.brain.generate_response.return_value = "回答"
+
+    voice_assistant.listen_and_respond()
+
+    call_args = voice_assistant.composer.compose_prompt.call_args
+    assert call_args[0][2] is voice_assistant.history

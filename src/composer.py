@@ -11,7 +11,7 @@ class Composer:
         log_init("Composer")
         log_ready("Composer")
 
-    def compose_prompt(self, query, search_results, history=None):
+    def compose_prompt(self, query, search_results, history=None, history_text=None):
         """Build prompt with search context and optional conversation history.
 
         Args:
@@ -20,12 +20,19 @@ class Composer:
             history: Optional :class:`ConversationHistory` instance.  When
                 provided and non-empty, past turns are prepended to the prompt
                 so the model can maintain conversational context.
+            history_text: Optional pre-computed history string (e.g. an LLM
+                summary produced by :class:`~src.history_summarizer.HistorySummarizer`).
+                When supplied, this string is used *instead of* calling
+                ``history.format_for_prompt()``, allowing Phase B summarization
+                to be injected without altering the prompt structure.
 
         Returns:
             A formatted prompt string for the LLM.
         """
         history_block = ""
-        if history is not None and not history.is_empty():
+        if history_text is not None and history_text.strip():
+            history_block = "これまでの会話履歴（要約）：\n" + history_text + "\n\n"
+        elif history is not None and not history.is_empty():
             history_block = (
                 "これまでの会話履歴：\n"
                 + history.format_for_prompt()

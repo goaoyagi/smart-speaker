@@ -11,6 +11,7 @@ from .composer import Composer
 from .brain import Brain
 from .speaker import Speaker
 from .conversation_history import ConversationHistory
+from .history_summarizer import HistorySummarizer
 from .exceptions import (
     ListenerError,
     SearchError,
@@ -22,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 class VoiceAssistant:
-    def __init__(self):
+    def __init__(self, use_llm_summary: bool = False):
         print("Initializing Voice Assistant...")
 
         # Initialize all components
@@ -32,6 +33,9 @@ class VoiceAssistant:
         self.brain = Brain()
         self.speaker = Speaker()
         self.history = ConversationHistory()
+
+        # Phase B: optional LLM-based history summarization
+        self._summarizer = HistorySummarizer(self.brain) if use_llm_summary else None
 
         print("Voice Assistant initialized!")
 
@@ -71,7 +75,11 @@ class VoiceAssistant:
             search_results = []
 
         # --- Compose & generate ---
-        prompt = self.composer.compose_prompt(text, search_results, self.history)
+        if self._summarizer is not None:
+            history_text = self._summarizer.summarize(self.history)
+            prompt = self.composer.compose_prompt(text, search_results, history_text=history_text)
+        else:
+            prompt = self.composer.compose_prompt(text, search_results, self.history)
 
         try:
             response = self.brain.generate_response(prompt)
