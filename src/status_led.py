@@ -63,6 +63,10 @@ class StatusLED:
         except Exception as e:
             logger.warning("Status LED update failed: %s", e)
             self._enabled = False
+            try:
+                self._led.close()
+            except Exception:
+                pass
             self._led = None
 
     def close(self):
