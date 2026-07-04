@@ -113,7 +113,8 @@ class VoiceAssistant:
         continues.  Fatal errors (:class:`~src.exceptions.ListenerError`,
         :class:`~src.exceptions.GenerationError`) propagate to the caller.
         """
-        logger.info("Starting continuous loop. Say '終わり' to stop.")
+        exit_words_str = "・".join(sorted(EXIT_WORDS))
+        logger.info("Starting continuous loop. Exit words: %s", exit_words_str)
         self._safe_speak(
             "会話を開始します。終わりたいときは「終わり」と言ってください。"
         )

@@ -313,7 +313,10 @@ def test_run_loop_continues_on_true(voice_assistant):
     iterator = iter(responses)
     voice_assistant.listen_and_respond = lambda: next(iterator)
     voice_assistant.run_loop()
-    # Exhausted all responses → loop stopped after 3 calls
+    # The iterator is exhausted only when all responses have been consumed,
+    # confirming that listen_and_respond was called exactly 3 times.
+    with pytest.raises(StopIteration):
+        next(iterator)
 
 
 def test_run_loop_stops_on_keyboard_interrupt(voice_assistant):
