@@ -11,6 +11,7 @@ from .composer import Composer
 from .brain import Brain
 from .speaker import Speaker
 from .conversation_history import ConversationHistory
+from .config import EXIT_WORDS
 from .exceptions import (
     ListenerError,
     SearchError,
@@ -50,7 +51,7 @@ class VoiceAssistant:
         if max_level < 0.03:
             logger.info("No speech detected (audio level too low: %.4f).", max_level)
             self._safe_speak("音声が検出されませんでした。")
-            return
+            return True
 
         # --- Transcribe ---
         try:
@@ -61,7 +62,13 @@ class VoiceAssistant:
 
         if not text.strip():
             logger.info("No speech detected.")
-            return
+            return True
+
+        # --- Check for exit command (Phase C) ---
+        if any(word in text for word in EXIT_WORDS):
+            logger.info("Exit command detected: %s", text)
+            self._safe_speak("会話を終了します。またいつでも話しかけてください。")
+            return False
 
         # --- Web search (non-fatal: degrade to no-context prompt) ---
         try:
@@ -90,6 +97,38 @@ class VoiceAssistant:
             logger.error("Speech output failed: %s", e)
             raise
 
+        return True
+
+    def run_loop(self):
+        """Continuously listen and respond until an exit word is spoken.
+
+        Calls :meth:`listen_and_respond` in a loop.  The loop terminates when:
+
+        * the user speaks one of the :data:`~src.config.EXIT_WORDS`, causing
+          ``listen_and_respond`` to return ``False``.
+        * a :class:`KeyboardInterrupt` is raised (e.g. Ctrl-C).
+
+        Non-fatal pipeline errors (:class:`~src.exceptions.SearchError`,
+        :class:`~src.exceptions.SpeakerError`) are logged and the loop
+        continues.  Fatal errors (:class:`~src.exceptions.ListenerError`,
+        :class:`~src.exceptions.GenerationError`) propagate to the caller.
+        """
+        logger.info("Starting continuous loop. Say '終わり' to stop.")
+        self._safe_speak(
+            "会話を開始します。終わりたいときは「終わり」と言ってください。"
+        )
+
+        while True:
+            try:
+                should_continue = self.listen_and_respond()
+                if should_continue is False:
+                    break
+            except KeyboardInterrupt:
+                logger.info("Loop interrupted by user.")
+                break
+            except (SearchError, SpeakerError) as e:
+                logger.warning("Non-fatal error in loop, continuing: %s", e)
+
     def _safe_speak(self, text):
         """Attempt to speak; log and continue if it fails."""
         try:
@@ -115,7 +154,7 @@ def main():
         raise SystemExit(1) from e
 
     try:
-        assistant.listen_and_respond()
+        assistant.run_loop()
     except KeyboardInterrupt:
         logger.info("Interrupted by user.")
     except (ListenerError, SearchError, GenerationError, SpeakerError) as e:

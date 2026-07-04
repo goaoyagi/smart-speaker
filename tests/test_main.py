@@ -197,23 +197,141 @@ def test_main_function():
          patch('src.main.Composer'), \
          patch('src.main.Brain'), \
          patch('src.main.Speaker'):
-        with patch.object(VoiceAssistant, 'listen_and_respond') as mock_listen, \
+        with patch.object(VoiceAssistant, 'run_loop') as mock_loop, \
              patch.object(VoiceAssistant, 'cleanup') as mock_cleanup:
             main()
-            mock_listen.assert_called_once()
+            mock_loop.assert_called_once()
             mock_cleanup.assert_called_once()
 
 
 def test_main_function_calls_cleanup_on_exception():
-    """Test that main() calls cleanup even when listen_and_respond raises"""
+    """Test that main() calls cleanup even when run_loop raises"""
     with patch('src.main.Listener'), \
          patch('src.main.Retriever'), \
          patch('src.main.Composer'), \
          patch('src.main.Brain'), \
          patch('src.main.Speaker'):
-        with patch.object(VoiceAssistant, 'listen_and_respond',
+        with patch.object(VoiceAssistant, 'run_loop',
                           side_effect=ListenerError("fail")), \
              patch.object(VoiceAssistant, 'cleanup') as mock_cleanup:
             with pytest.raises(SystemExit):
                 main()
             mock_cleanup.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Phase C: continuous loop and exit word detection
+# ---------------------------------------------------------------------------
+
+def test_listen_and_respond_returns_true_on_success(voice_assistant):
+    """Successful pipeline should return True (continue loop)."""
+    audio = np.full(16000, 0.5, dtype=np.float32)
+    voice_assistant.listener.record_audio.return_value = audio
+    voice_assistant.listener.transcribe.return_value = "今日の天気は？"
+    voice_assistant.retriever.search_web.return_value = []
+    voice_assistant.composer.compose_prompt.return_value = "prompt"
+    voice_assistant.brain.generate_response.return_value = "晴れです"
+
+    result = voice_assistant.listen_and_respond()
+    assert result is True
+
+
+def test_listen_and_respond_returns_true_on_low_audio(voice_assistant):
+    """Silent audio should return True (keep looping, just skip)."""
+    silent_audio = np.zeros(16000, dtype=np.float32)
+    voice_assistant.listener.record_audio.return_value = silent_audio
+
+    result = voice_assistant.listen_and_respond()
+    assert result is True
+
+
+def test_listen_and_respond_returns_false_on_exit_word(voice_assistant):
+    """Exit word in transcription should return False (stop loop)."""
+    audio = np.full(16000, 0.5, dtype=np.float32)
+    voice_assistant.listener.record_audio.return_value = audio
+    voice_assistant.listener.transcribe.return_value = "終わり"
+
+    result = voice_assistant.listen_and_respond()
+    assert result is False
+
+
+def test_listen_and_respond_exit_word_speaks_farewell(voice_assistant):
+    """Exit word should trigger a farewell message."""
+    audio = np.full(16000, 0.5, dtype=np.float32)
+    voice_assistant.listener.record_audio.return_value = audio
+    voice_assistant.listener.transcribe.return_value = "終了"
+
+    voice_assistant.listen_and_respond()
+
+    voice_assistant.speaker.speak.assert_called_once()
+    spoken = voice_assistant.speaker.speak.call_args[0][0]
+    assert "終了" in spoken or "終わり" in spoken or "またいつ" in spoken
+
+
+def test_listen_and_respond_exit_word_skips_pipeline(voice_assistant):
+    """Exit word should not trigger search or generation."""
+    audio = np.full(16000, 0.5, dtype=np.float32)
+    voice_assistant.listener.record_audio.return_value = audio
+    voice_assistant.listener.transcribe.return_value = "ストップ"
+
+    voice_assistant.listen_and_respond()
+
+    voice_assistant.retriever.search_web.assert_not_called()
+    voice_assistant.brain.generate_response.assert_not_called()
+
+
+def test_listen_and_respond_exit_word_not_stored_in_history(voice_assistant):
+    """Exit command should not be recorded in conversation history."""
+    audio = np.full(16000, 0.5, dtype=np.float32)
+    voice_assistant.listener.record_audio.return_value = audio
+    voice_assistant.listener.transcribe.return_value = "終わり"
+
+    voice_assistant.listen_and_respond()
+
+    assert voice_assistant.history.is_empty()
+
+
+def test_run_loop_stops_on_exit_word(voice_assistant):
+    """run_loop() should stop when listen_and_respond returns False."""
+    call_count = 0
+
+    def mock_listen():
+        nonlocal call_count
+        call_count += 1
+        if call_count >= 3:
+            return False
+        return True
+
+    voice_assistant.listen_and_respond = mock_listen
+    voice_assistant.run_loop()
+    assert call_count == 3
+
+
+def test_run_loop_continues_on_true(voice_assistant):
+    """run_loop() should keep calling listen_and_respond while it returns True."""
+    responses = [True, True, False]
+    iterator = iter(responses)
+    voice_assistant.listen_and_respond = lambda: next(iterator)
+    voice_assistant.run_loop()
+    # Exhausted all responses → loop stopped after 3 calls
+
+
+def test_run_loop_stops_on_keyboard_interrupt(voice_assistant):
+    """run_loop() should stop cleanly on KeyboardInterrupt."""
+    voice_assistant.listen_and_respond = MagicMock(side_effect=KeyboardInterrupt)
+    voice_assistant.run_loop()  # Should not raise
+
+
+def test_run_loop_continues_on_search_error(voice_assistant):
+    """Non-fatal SearchError in listen_and_respond should not stop the loop."""
+    responses = [SearchError("offline"), True, False]
+    iterator = iter(responses)
+
+    def mock_listen():
+        r = next(iterator)
+        if isinstance(r, Exception):
+            raise r
+        return r
+
+    voice_assistant.listen_and_respond = mock_listen
+    voice_assistant.run_loop()  # Should complete without raising

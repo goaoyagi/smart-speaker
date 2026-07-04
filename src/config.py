@@ -29,6 +29,12 @@ SPEAKER_DEVICE = os.getenv("SPEAKER_DEVICE", "plughw:0,0")
 PIPER_MODEL_PATH = os.getenv("PIPER_MODEL_PATH", "./models/tsukuyomi.onnx")
 PIPER_CONFIG_PATH = os.getenv("PIPER_CONFIG_PATH", "./models/config.json")
 
+# Continuous loop exit commands (Phase C)
+EXIT_WORDS = frozenset({
+    "終わり", "おわり", "終了", "しゅうりょう",
+    "停止", "ていし", "ストップ", "やめて", "やめる",
+})
+
 # URL validation
 _ALLOWED_SCHEMES = {"http", "https"}
 
