@@ -10,6 +10,8 @@ from .retriever import Retriever
 from .composer import Composer
 from .brain import Brain
 from .speaker import Speaker
+from .conversation_history import ConversationHistory
+from .summarizer import ConversationSummarizer
 from .exceptions import (
     ListenerError,
     SearchError,
@@ -30,6 +32,8 @@ class VoiceAssistant:
         self.composer = Composer()
         self.brain = Brain()
         self.speaker = Speaker()
+        self.history = ConversationHistory()
+        self.summarizer = ConversationSummarizer(self.brain)
 
         print("Voice Assistant initialized!")
 
@@ -68,8 +72,11 @@ class VoiceAssistant:
             logger.warning("Search failed, proceeding without context: %s", e)
             search_results = []
 
+        # --- Summarize history for context (LLM-based condensation) ---
+        history_context = self.summarizer.summarize(self.history)
+
         # --- Compose & generate ---
-        prompt = self.composer.compose_prompt(text, search_results)
+        prompt = self.composer.compose_prompt(text, search_results, history_context)
 
         try:
             response = self.brain.generate_response(prompt)
@@ -77,6 +84,9 @@ class VoiceAssistant:
             logger.error("AI generation failed: %s", e)
             self._safe_speak("申し訳ありませんが、回答を生成できませんでした。")
             raise
+
+        # --- Store turn in history ---
+        self.history.add_turn(text, response)
 
         # --- Speak ---
         try:

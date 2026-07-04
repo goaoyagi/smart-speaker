@@ -5,7 +5,7 @@ Tests for main orchestrator
 
 import pytest
 import numpy as np
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch, MagicMock, call
 import sys
 
 # Mock external dependencies before import
@@ -13,6 +13,8 @@ sys.modules['faster_whisper'] = MagicMock()
 sys.modules['piper'] = MagicMock()
 
 from src.main import VoiceAssistant, main
+from src.conversation_history import ConversationHistory
+from src.summarizer import ConversationSummarizer
 from src.exceptions import ListenerError, SearchError, GenerationError, SpeakerError
 
 
@@ -25,6 +27,9 @@ def voice_assistant():
          patch('src.main.Brain') as mock_brain_cls, \
          patch('src.main.Speaker') as mock_speaker_cls:
         assistant = VoiceAssistant()
+        # Replace summarizer with a mock so LLM calls are not made in tests
+        assistant.summarizer = Mock()
+        assistant.summarizer.summarize.return_value = ""
         return assistant
 
 
@@ -35,6 +40,17 @@ def test_voice_assistant_initialization(voice_assistant):
     assert voice_assistant.composer is not None
     assert voice_assistant.brain is not None
     assert voice_assistant.speaker is not None
+
+
+def test_voice_assistant_has_history(voice_assistant):
+    """VoiceAssistant should expose a ConversationHistory instance."""
+    assert isinstance(voice_assistant.history, ConversationHistory)
+    assert voice_assistant.history.is_empty()
+
+
+def test_voice_assistant_has_summarizer(voice_assistant):
+    """VoiceAssistant should expose a ConversationSummarizer (or mock)."""
+    assert voice_assistant.summarizer is not None
 
 
 def test_cleanup(voice_assistant):
@@ -84,6 +100,69 @@ def test_listen_and_respond_successful_flow(voice_assistant):
     voice_assistant.speaker.speak.assert_called_once_with("今日は晴れです")
 
 
+def test_listen_and_respond_passes_history_context_to_composer(voice_assistant):
+    """compose_prompt should receive the LLM-summarized history context."""
+    audio = np.full(16000, 0.5, dtype=np.float32)
+    voice_assistant.listener.record_audio.return_value = audio
+    voice_assistant.listener.transcribe.return_value = "質問"
+    voice_assistant.retriever.search_web.return_value = []
+    voice_assistant.composer.compose_prompt.return_value = "prompt"
+    voice_assistant.brain.generate_response.return_value = "回答"
+    voice_assistant.summarizer.summarize.return_value = "過去の要約"
+
+    voice_assistant.listen_and_respond()
+
+    call_args = voice_assistant.composer.compose_prompt.call_args
+    query, search_results, history_context = call_args.args
+    assert history_context == "過去の要約"
+
+
+def test_listen_and_respond_calls_summarizer_with_history(voice_assistant):
+    """Summarizer should be called with the assistant's history object."""
+    audio = np.full(16000, 0.5, dtype=np.float32)
+    voice_assistant.listener.record_audio.return_value = audio
+    voice_assistant.listener.transcribe.return_value = "質問"
+    voice_assistant.retriever.search_web.return_value = []
+    voice_assistant.composer.compose_prompt.return_value = "prompt"
+    voice_assistant.brain.generate_response.return_value = "回答"
+
+    voice_assistant.listen_and_respond()
+
+    voice_assistant.summarizer.summarize.assert_called_once_with(voice_assistant.history)
+
+
+def test_listen_and_respond_stores_turn_in_history(voice_assistant):
+    """After a successful turn, history should contain the Q&A pair."""
+    audio = np.full(16000, 0.5, dtype=np.float32)
+    voice_assistant.listener.record_audio.return_value = audio
+    voice_assistant.listener.transcribe.return_value = "今日は何日ですか"
+    voice_assistant.retriever.search_web.return_value = []
+    voice_assistant.composer.compose_prompt.return_value = "prompt"
+    voice_assistant.brain.generate_response.return_value = "三日です"
+
+    voice_assistant.listen_and_respond()
+
+    assert len(voice_assistant.history) == 1
+    formatted = voice_assistant.history.format_for_prompt()
+    assert "今日は何日ですか" in formatted
+    assert "三日です" in formatted
+
+
+def test_listen_and_respond_generation_failure_does_not_store_history(voice_assistant):
+    """Failed generation should not add a turn to history."""
+    audio = np.full(16000, 0.5, dtype=np.float32)
+    voice_assistant.listener.record_audio.return_value = audio
+    voice_assistant.listener.transcribe.return_value = "質問"
+    voice_assistant.retriever.search_web.return_value = []
+    voice_assistant.composer.compose_prompt.return_value = "prompt"
+    voice_assistant.brain.generate_response.side_effect = GenerationError("timeout")
+
+    with pytest.raises(GenerationError):
+        voice_assistant.listen_and_respond()
+
+    assert voice_assistant.history.is_empty()
+
+
 def test_listen_and_respond_recording_failure(voice_assistant):
     """Test that ListenerError propagates from record_audio"""
     voice_assistant.listener.record_audio.side_effect = ListenerError("mic broken")
@@ -102,7 +181,10 @@ def test_listen_and_respond_search_failure_degrades_gracefully(voice_assistant):
 
     voice_assistant.listen_and_respond()
 
-    voice_assistant.composer.compose_prompt.assert_called_once_with("テスト", [])
+    call_args = voice_assistant.composer.compose_prompt.call_args
+    query, search_results, history_context = call_args.args
+    assert query == "テスト"
+    assert search_results == []
     voice_assistant.speaker.speak.assert_called_once_with("回答")
 
 
