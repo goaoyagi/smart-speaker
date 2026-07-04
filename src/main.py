@@ -10,6 +10,7 @@ from .retriever import Retriever
 from .composer import Composer
 from .brain import Brain
 from .speaker import Speaker
+from .status_led import StatusLED, LedState
 from .exceptions import (
     ListenerError,
     SearchError,
@@ -30,6 +31,7 @@ class VoiceAssistant:
         self.composer = Composer()
         self.brain = Brain()
         self.speaker = Speaker()
+        self.status_led = StatusLED()
 
         print("Voice Assistant initialized!")
 
@@ -37,52 +39,64 @@ class VoiceAssistant:
         """Main conversation loop"""
         logger.info("Voice Assistant Ready — Speak now (will record for 10 seconds)...")
 
-        # --- Record & validate audio ---
         try:
-            audio_array = self.listener.record_audio()
-        except ListenerError as e:
-            logger.error("Recording failed: %s", e)
-            raise
+            # --- Record & validate audio ---
+            self.status_led.set_state(LedState.LISTENING)
+            try:
+                audio_array = self.listener.record_audio()
+            except ListenerError as e:
+                logger.error("Recording failed: %s", e)
+                raise
 
-        max_level = np.max(np.abs(audio_array))
-        if max_level < 0.03:
-            logger.info("No speech detected (audio level too low: %.4f).", max_level)
-            self._safe_speak("音声が検出されませんでした。")
-            return
+            max_level = np.max(np.abs(audio_array))
+            if max_level < 0.03:
+                logger.info("No speech detected (audio level too low: %.4f).", max_level)
+                self._safe_speak("音声が検出されませんでした。")
+                self.status_led.set_state(LedState.IDLE)
+                return
 
-        # --- Transcribe ---
-        try:
-            text = self.listener.transcribe(audio_array)
-        except ListenerError as e:
-            logger.error("Transcription failed: %s", e)
-            raise
+            # --- Transcribe ---
+            try:
+                text = self.listener.transcribe(audio_array)
+            except ListenerError as e:
+                logger.error("Transcription failed: %s", e)
+                raise
 
-        if not text.strip():
-            logger.info("No speech detected.")
-            return
+            if not text.strip():
+                logger.info("No speech detected.")
+                self.status_led.set_state(LedState.IDLE)
+                return
 
-        # --- Web search (non-fatal: degrade to no-context prompt) ---
-        try:
-            search_results = self.retriever.search_web(text)
-        except SearchError as e:
-            logger.warning("Search failed, proceeding without context: %s", e)
-            search_results = []
+            # --- Web search (non-fatal: degrade to no-context prompt) ---
+            self.status_led.set_state(LedState.SEARCHING)
+            try:
+                search_results = self.retriever.search_web(text)
+            except SearchError as e:
+                logger.warning("Search failed, proceeding without context: %s", e)
+                search_results = []
 
-        # --- Compose & generate ---
-        prompt = self.composer.compose_prompt(text, search_results)
+            # --- Compose & generate ---
+            self.status_led.set_state(LedState.THINKING)
+            prompt = self.composer.compose_prompt(text, search_results)
 
-        try:
-            response = self.brain.generate_response(prompt)
-        except GenerationError as e:
-            logger.error("AI generation failed: %s", e)
-            self._safe_speak("申し訳ありませんが、回答を生成できませんでした。")
-            raise
+            try:
+                response = self.brain.generate_response(prompt)
+            except GenerationError as e:
+                logger.error("AI generation failed: %s", e)
+                self._safe_speak("申し訳ありませんが、回答を生成できませんでした。")
+                raise
 
-        # --- Speak ---
-        try:
-            self.speaker.speak(response)
-        except SpeakerError as e:
-            logger.error("Speech output failed: %s", e)
+            # --- Speak ---
+            self.status_led.set_state(LedState.SPEAKING)
+            try:
+                self.speaker.speak(response)
+            except SpeakerError as e:
+                logger.error("Speech output failed: %s", e)
+                raise
+
+            self.status_led.set_state(LedState.IDLE)
+        except Exception:
+            self.status_led.set_state(LedState.ERROR)
             raise
 
     def _safe_speak(self, text):
@@ -94,7 +108,7 @@ class VoiceAssistant:
 
     def cleanup(self):
         """Clean up resources"""
-        pass
+        self.status_led.close()
 
 
 def main():

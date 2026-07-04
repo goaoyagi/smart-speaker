@@ -5,25 +5,28 @@ Tests for main orchestrator
 
 import pytest
 import numpy as np
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch, MagicMock, call
 import sys
 
 # Mock external dependencies before import
 sys.modules['faster_whisper'] = MagicMock()
 sys.modules['piper'] = MagicMock()
+sys.modules['gpiozero'] = MagicMock()
 
-from src.main import VoiceAssistant, main
-from src.exceptions import ListenerError, SearchError, GenerationError, SpeakerError
+from src.main import VoiceAssistant, main  # noqa: E402
+from src.status_led import LedState  # noqa: E402
+from src.exceptions import ListenerError, SearchError, GenerationError  # noqa: E402
 
 
 @pytest.fixture
 def voice_assistant():
     """Create VoiceAssistant instance with mocked components"""
-    with patch('src.main.Listener') as mock_listener_cls, \
-         patch('src.main.Retriever') as mock_retriever_cls, \
-         patch('src.main.Composer') as mock_composer_cls, \
-         patch('src.main.Brain') as mock_brain_cls, \
-         patch('src.main.Speaker') as mock_speaker_cls:
+    with patch('src.main.Listener'), \
+         patch('src.main.Retriever'), \
+         patch('src.main.Composer'), \
+         patch('src.main.Brain'), \
+         patch('src.main.Speaker'), \
+         patch('src.main.StatusLED'):
         assistant = VoiceAssistant()
         return assistant
 
@@ -35,6 +38,7 @@ def test_voice_assistant_initialization(voice_assistant):
     assert voice_assistant.composer is not None
     assert voice_assistant.brain is not None
     assert voice_assistant.speaker is not None
+    assert voice_assistant.status_led is not None
 
 
 def test_cleanup(voice_assistant):
@@ -50,6 +54,10 @@ def test_listen_and_respond_low_audio(voice_assistant):
     voice_assistant.listen_and_respond()
 
     voice_assistant.speaker.speak.assert_called_once_with("音声が検出されませんでした。")
+    assert voice_assistant.status_led.set_state.call_args_list == [
+        call(LedState.LISTENING),
+        call(LedState.IDLE),
+    ]
 
 
 def test_listen_and_respond_empty_transcription(voice_assistant):
@@ -61,6 +69,10 @@ def test_listen_and_respond_empty_transcription(voice_assistant):
     voice_assistant.listen_and_respond()
 
     voice_assistant.retriever.search_web.assert_not_called()
+    assert voice_assistant.status_led.set_state.call_args_list == [
+        call(LedState.LISTENING),
+        call(LedState.IDLE),
+    ]
 
 
 def test_listen_and_respond_successful_flow(voice_assistant):
@@ -82,6 +94,13 @@ def test_listen_and_respond_successful_flow(voice_assistant):
     voice_assistant.composer.compose_prompt.assert_called_once()
     voice_assistant.brain.generate_response.assert_called_once_with("プロンプト")
     voice_assistant.speaker.speak.assert_called_once_with("今日は晴れです")
+    assert voice_assistant.status_led.set_state.call_args_list == [
+        call(LedState.LISTENING),
+        call(LedState.SEARCHING),
+        call(LedState.THINKING),
+        call(LedState.SPEAKING),
+        call(LedState.IDLE),
+    ]
 
 
 def test_listen_and_respond_recording_failure(voice_assistant):
@@ -89,6 +108,10 @@ def test_listen_and_respond_recording_failure(voice_assistant):
     voice_assistant.listener.record_audio.side_effect = ListenerError("mic broken")
     with pytest.raises(ListenerError):
         voice_assistant.listen_and_respond()
+    assert voice_assistant.status_led.set_state.call_args_list == [
+        call(LedState.LISTENING),
+        call(LedState.ERROR),
+    ]
 
 
 def test_listen_and_respond_search_failure_degrades_gracefully(voice_assistant):
@@ -104,6 +127,13 @@ def test_listen_and_respond_search_failure_degrades_gracefully(voice_assistant):
 
     voice_assistant.composer.compose_prompt.assert_called_once_with("テスト", [])
     voice_assistant.speaker.speak.assert_called_once_with("回答")
+    assert voice_assistant.status_led.set_state.call_args_list == [
+        call(LedState.LISTENING),
+        call(LedState.SEARCHING),
+        call(LedState.THINKING),
+        call(LedState.SPEAKING),
+        call(LedState.IDLE),
+    ]
 
 
 def test_listen_and_respond_generation_failure(voice_assistant):
@@ -117,6 +147,12 @@ def test_listen_and_respond_generation_failure(voice_assistant):
 
     with pytest.raises(GenerationError):
         voice_assistant.listen_and_respond()
+    assert voice_assistant.status_led.set_state.call_args_list == [
+        call(LedState.LISTENING),
+        call(LedState.SEARCHING),
+        call(LedState.THINKING),
+        call(LedState.ERROR),
+    ]
 
 
 def test_main_function():
@@ -125,7 +161,8 @@ def test_main_function():
          patch('src.main.Retriever'), \
          patch('src.main.Composer'), \
          patch('src.main.Brain'), \
-         patch('src.main.Speaker'):
+         patch('src.main.Speaker'), \
+         patch('src.main.StatusLED'):
         with patch.object(VoiceAssistant, 'listen_and_respond') as mock_listen, \
              patch.object(VoiceAssistant, 'cleanup') as mock_cleanup:
             main()
@@ -139,7 +176,8 @@ def test_main_function_calls_cleanup_on_exception():
          patch('src.main.Retriever'), \
          patch('src.main.Composer'), \
          patch('src.main.Brain'), \
-         patch('src.main.Speaker'):
+         patch('src.main.Speaker'), \
+         patch('src.main.StatusLED'):
         with patch.object(VoiceAssistant, 'listen_and_respond',
                           side_effect=ListenerError("fail")), \
              patch.object(VoiceAssistant, 'cleanup') as mock_cleanup:
