@@ -80,7 +80,7 @@ smart-speaker/
 ### テスト
 
 - **外部 API（SearXNG / Ollama）へ実リクエストを送らない**
-- `pytest-mock` または `unittest.mock` でモック化する
+- `pytest-mock`（`mocker` フィクスチャ）または `unittest.mock` でモック化する
 - 新規 `src/*.py` には対応する `tests/test_*.py` を追加する（ミラーテスト）
 - テスト実行: `python3 -m pytest tests/ -v`
 - 外部依存（`faster_whisper`, `piper`, `gpiozero` 等）は import 前にモックする既存パターンに従う
@@ -91,7 +91,7 @@ smart-speaker/
 
 - Python 3、モジュール先頭に `#!/usr/bin/env python3` と docstring
 - クラスベースのコンポーネント設計（`Listener`, `Retriever`, `Composer`, `Brain`, `Speaker`, `StatusLED`）
-- ログは `logging.getLogger(__name__)` を使用。`print` は初期化メッセージ等の既存箇所に合わせる
+- ログは `logging.getLogger(__name__)` を使用。新規コードでは `print` デバッグを追加しない（既存の初期化メッセージ等は現状維持）
 - 初期化ログは `audio_utils.log_init` / `log_ready` を使う
 
 ### エラーハンドリング
@@ -144,18 +144,40 @@ smart-speaker/
 - 英語混在プロンプトへの変更（TTS 品質劣化）
 - 生成後 RAG への設計変更（事前検索 → プロンプト注入の原則を維持）
 
+## セットアップ
+
+```bash
+# 開発・テスト用
+pip install pytest pytest-mock numpy requests
+
+# 本番ロジック用（Piper は必ず fork 版）
+pip install faster-whisper piper-tts-plus requests
+
+# 環境変数
+cp .env.example .env   # 必要に応じて編集
+```
+
 ## よく使うコマンド
 
 ```bash
-# テスト
+# テスト（コード変更後は必ず実行）
 python3 -m pytest tests/ -v
 
 # 実行（Pi 上・依存サービス起動後）
 python3 src/main.py
-
-# 環境変数セットアップ
-cp .env.example .env
 ```
+
+### テストの import パス
+
+- ルートの `conftest.py` が `src/` を `sys.path` に追加している
+- テストは `from src.X import ...` で import する
+- 共通フィクスチャは `tests/conftest.py`（`mock_audio_array`, `mock_search_results`, `mock_transcribed_text`）を再利用する
+
+## コミット・PR
+
+- 秘密情報（`.env`, 音声モデル `models/`, `*.wav`, `*.log`）はコミットしない
+- コミット前に `python3 -m pytest tests/ -v` が全パスすることを確認する
+- 1 PR は 1 つの目的に絞る
 
 ## 参照ドキュメント
 
