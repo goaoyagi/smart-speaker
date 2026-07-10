@@ -75,27 +75,39 @@ python3 -m pytest tests/ -v
 
 ```
 smart-speaker/
+├── AGENTS.md               # AIエージェント向け開発ルール
 ├── project_context.md      # プロジェクト要件
-├── README.md              # 本ファイル
-├── .gitignore            # Git除外設定
-├── .env.example          # 環境変数テンプレート
+├── future_extensions.md    # 将来の機能拡張バックログ
+├── README.md               # 本ファイル（セットアップ・実行方法）
+├── .gitignore              # Git除外設定
+├── .env.example            # 環境変数テンプレート
+├── conftest.py             # src/ を sys.path に追加（テスト用）
 ├── src/
 │   ├── __init__.py
-│   ├── main.py           # オーケストレーター
-│   ├── listener.py       # Whisper音声認識
-│   ├── retriever.py      # SearXNG Web検索
-│   ├── composer.py       # RAGプロンプト構成
-│   ├── brain.py          # Ollama AI生成
-│   └── speaker.py        # Piper-Plus TTS
+│   ├── main.py             # オーケストレーター
+│   ├── listener.py         # Whisper音声認識
+│   ├── retriever.py        # SearXNG Web検索
+│   ├── composer.py         # RAGプロンプト構成
+│   ├── brain.py            # Ollama AI生成
+│   ├── speaker.py          # Piper-Plus TTS
+│   ├── status_led.py       # GPIO ステータスLED制御
+│   ├── config.py           # 環境変数の一元管理・URL検証
+│   ├── http_client.py      # 共通HTTPクライアント
+│   ├── exceptions.py       # ドメイン固有の例外
+│   └── audio_utils.py      # 音声・ログ共通ユーティリティ
 └── tests/
     ├── __init__.py
-    ├── conftest.py       # pytest共通フィクスチャ
+    ├── conftest.py         # pytest共通フィクスチャ
     ├── test_main.py
     ├── test_listener.py
     ├── test_retriever.py
     ├── test_composer.py
     ├── test_brain.py
-    └── test_speaker.py
+    ├── test_speaker.py
+    ├── test_status_led.py
+    ├── test_config.py
+    ├── test_http_client.py
+    └── test_audio_utils.py
 ```
 
 ## 注意点
