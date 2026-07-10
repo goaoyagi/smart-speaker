@@ -6,6 +6,18 @@ AIエージェント（Devin など）がこのリポジトリで作業する際
 - セットアップ・動かし方は `README.md` を参照。
 - 本ファイルは開発ルールのみを扱う。
 
+## 設計上の制約
+
+`project_context.md` の要件を、実装・修正時に守るためのルール。
+
+- **生成前RAG** の処理順序を崩さない（検索 → プロンプト構成 → 生成）。生成後検証への設計変更はしない。
+- 回答は**日本語のみ**（アルファベットを含めない）。TTS の安定性のため、`composer.py` のプロンプトが持つ
+  日本語限定・アルファベット禁止の指示を維持する。
+- `main.py` のエラー方針に合わせる:
+  - 検索失敗（`SearchError`）は**非致命**。空コンテキストで処理を続行する。
+  - 録音・認識（`ListenerError`）・生成（`GenerationError`）・発話（`SpeakerError`）の失敗は**致命**。
+- `future_extensions.md` の機能は、**明示的な依頼がない限り着手しない**。
+
 ## テスト
 
 - コードを変更したら、コミット前に**必ず** `python3 -m pytest tests/ -v` を実行し、全パスさせる。
@@ -13,6 +25,7 @@ AIエージェント（Devin など）がこのリポジトリで作業する際
   新しいモジュールを追加したら、対応する `tests/test_*.py` も必ず追加する。
 - 外部サービス（SearXNG / Ollama）やハードウェア（マイク・GPIO）には**絶対に実アクセスしない**。
   `pytest-mock`（`mocker` フィクスチャ）でモック化すること。
+- 外部依存ライブラリ（`faster_whisper`, `piper`, `gpiozero` 等）は、import 前にモックする既存パターンに従う。
 - 共通のテスト用データは `tests/conftest.py` のフィクスチャ
   （`mock_audio_array`, `mock_search_results`, `mock_transcribed_text`）を再利用する。
 - ルートの `conftest.py` が `src/` を `sys.path` に追加しているため、
@@ -26,10 +39,12 @@ AIエージェント（Devin など）がこのリポジトリで作業する際
   （設定の重複を避けるため一元管理している）。
 - **HTTP 通信は `src/http_client.py`** の `http_get_json` / `http_post_json` を使う。
   `requests` を各モジュールで直接呼び出して重複したエラーハンドリングを書かない。
+  URL は `config.validate_url()`（`http` / `https` のみ許可）で検証する。
 - **例外は `src/exceptions.py`** のドメイン固有例外を使う
   （`ListenerError`, `SearchError`, `GenerationError`, `SpeakerError`。基底は `VoiceAssistantError`）。
   裸の `Exception` を投げない。低レベル例外は `raise XxxError(...) from e` でラップする。
 - ロギングは `logging.getLogger(__name__)` を使い、`print()` でのデバッグ出力を残さない。
+  初期化・準備完了のログは `audio_utils.log_init` / `log_ready` を使う。
 - 変更は最小限・対象を絞る。無関係なファイルやテストを書き換えない。
 
 ## コンポーネント別の実装ルール
@@ -43,5 +58,6 @@ AIエージェント（Devin など）がこのリポジトリで作業する際
 ## コミット・PR
 
 - 秘密情報（`.env`, 音声モデル `models/`, `*.wav`, `*.log`）はコミットしない（`.gitignore` 済み）。
+- 設定項目を追加・変更したら `.env.example` を更新する。
 - コミット前に必ず `python3 -m pytest tests/ -v` が全パスすることを確認する。
 - 1 PR は 1 つの目的に絞る。
