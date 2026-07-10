@@ -165,3 +165,13 @@ cp .env.example .env
 | `README.md` | セットアップ・Docker・ディレクトリ構成 |
 | `future_extensions.md` | 未実装の拡張ロードマップ |
 | `.env.example` | 環境変数一覧 |
+
+## Cursor Cloud specific instructions
+
+Cloud VM は **非 Raspberry Pi の Linux (Ubuntu 24.04 / Python 3.12)** で、マイク・スピーカー・GPIO は存在しない。
+
+- **開発の主軸はテストスイート**: `python3 -m pytest tests/ -v`（リポジトリルートから実行。ルートの `conftest.py` が `src/` を `sys.path` に追加する）。全 48 テストが通ればグリーン。
+- **依存関係**: `numpy` と `requests` はベースイメージに導入済み。`pytest` / `pytest-mock` は起動時の update script で入る。`faster_whisper` / `piper` / `gpiozero` は **未インストール**で構わない（テストは import 前に `MagicMock` で差し替える既存パターンを踏襲）。
+- **`python3 src/main.py` はこの環境では完走できない**: 実マイク(`arecord`)・スピーカー(`aplay`)・GPIO に加え、稼働中の SearXNG(:8080)/Ollama(:11434) と `models/` 配下の Whisper・Piper モデルが必要。ハードウェア無しでパイプラインを手動確認する場合は、テスト同様に外部境界（`subprocess.run`・`requests.get/post`・`WhisperModel`・`PiperVoice`）をモックして `VoiceAssistant.listen_and_respond()` を回す。
+- **Lint/CI 設定は無い**（flake8 / ruff / pre-commit / GitHub Actions いずれも未設定）。構文確認は `python3 -m py_compile src/*.py` で代用可能。
+- pip はユーザーサイト（`~/.local`）へインストールされ、`python3 -m pytest` から解決される（`--break-system-packages` は不要）。
