@@ -1,52 +1,54 @@
-# AIスマートスピーカー開発要件（ラズパイ5）
+# AIスマートスピーカー 要件・コンテキスト（ラズパイ5）
 
-## 1. システムアーキテクチャ（ローカルRAG構成）
-ハルシネーション（嘘）を徹底的に防ぐため、以下の順序で処理を行う。生成後の検証ではなく、**「生成前RAG（あらかじめカンニングペーパーを渡す）」を徹底**すること。
+> セットアップ・実行方法は `README.md`、開発ルールは `AGENTS.md` を参照。
 
-1. **[耳] listener.py**: Whisper.cpp でユーザーの音声をテキスト化。
-2. **[検索] retriever.py**: 質問をトリガーに、ローカルの「SearXNG」でWeb検索を実行。
-3. **[構成] composer.py**: 検索結果（事実ソース）と質問をプロンプトに編成。
-4. **[脳] brain.py**: プロンプトを Ollama（Qwen2.5:3b）に投入し、事実に基づく回答を生成。
-5. **[口] speaker.py**: `piper-tts-plus` で音声合成して発話。
+## 1. プロジェクト概要
 
-## 2. 必要依存ライブラリ
-開発環境および本番環境の構築時、以下のライブラリを `pip install` すること。
+ラズパイ 5 上で動作する**ローカル完結型**の日本語 AI スマートスピーカー。  
+外部クラウド API を使わず、すべてのコンポーネント（音声認識・検索・LLM・TTS）をローカルで完結させる。
 
-### 開発・テスト用
-- **pytest** : テスト駆動開発用のメインフレームワーク
-- **pytest-mock** : 外部APIやハードウェアをモック化するためのプラグイン
+## 2. 設計思想：生成前 RAG によるハルシネーション防止
 
-### 本番ロジック用
-- **piper-tts-plus** : 日本語特化の音声合成（OpenJTalk内蔵版）
-- **requests** : SearXNGサーバーおよびOllamaローカルAPIとの通信用
+LLM が「知らないことを作り話する（ハルシネーション）」を根本から防ぐため、**「生成後の検証」ではなく「生成前 RAG」**を採用する。  
+ユーザーの質問を受け取ったら、まず Web 検索で事実を収集し、その検索結果をプロンプトにそのまま埋め込んでから LLM に渡す。LLM は与えられた事実のみをもとに回答する。
 
-## 3. 各コンポーネントの実装注意点
-### speaker.py (音声合成)
-- 本家Piper（espeak-ng依存）は日本語のアクセント解析が未対応のため絶対に使用しないこと。
-- 必ず日本語特化のフォーク版である `piper-tts-plus` を使用すること。
-- 使用する音声モデルは、Hugging Face等からJVSデータセット等の日本語ONNXモデルとJSON設定ファイルを取得して利用すること。
+## 3. システムアーキテクチャ（5ステップパイプライン）
 
-### retriever.py / brain.py (外部通信)
-- テスト実行時は、実際のローカルサーバー（SearXNG / Ollama）にリクエストを飛ばさず、必ず `pytest-mock` を使用してレスポンスをシミュレート（モック化）すること。
+```
+マイク入力
+   │
+   ▼
+[耳] listener.py   — arecord で録音 → faster-whisper で日本語テキスト化
+   │
+   ▼
+[検索] retriever.py  — SearXNG（localhost:8080）でWeb検索、上位5件取得
+   │
+   ▼
+[構成] composer.py   — 検索結果＋質問をプロンプトに編成（日本語のみ出力を強制）
+   │
+   ▼
+[脳] brain.py      — Ollama（localhost:11434、Qwen2.5:3b）でレスポンス生成
+   │
+   ▼
+[口] speaker.py    — piper-tts-plus で音声合成 → aplay で再生
+```
 
-## 4. ディレクトリ構成（srcレイアウト・ミラーテスト）
-```text
-smart-speaker/
-├── project_context.md      # 本ドキュメント
-├── src/
-│   ├── __init__.py
-│   ├── main.py             # 全体を統括するオーケストレーター
-│   ├── listener.py
-│   ├── retriever.py
-│   ├── composer.py
-│   ├── brain.py
-│   └── speaker.py
-└── tests/
-    ├── __init__.py
-    ├── conftest.py         # pytest共通フィクスチャ・モック定義
-    ├── test_main.py
-    ├── test_listener.py
-    ├── test_retriever.py
-    ├── test_composer.py
-    ├── test_brain.py
-    └── test_speaker.py
+`status_led.py` は各ステップに連動して GPIO LED 状態（IDLE / LISTENING / SEARCHING / THINKING / SPEAKING / ERROR）を更新し、視覚フィードバックを提供する。
+
+## 4. 技術選定の理由
+
+| コンポーネント | 採用技術 | 理由 |
+|---|---|---|
+| 音声認識 | faster-whisper（small モデル） | ラズパイ 5 で CPU 推論可能な精度・速度バランス |
+| Web 検索 | SearXNG（ローカル Docker） | プライバシー保護・外部 API 不要のローカル検索 |
+| LLM | Ollama + Qwen2.5:3b | ラズパイ 5 のメモリ内で動作する最小クラスの高品質モデル |
+| TTS | piper-tts-plus | 本家 piper（espeak-ng 依存）は日本語アクセント解析未対応のため、日本語特化フォーク版を採用 |
+| TTS モデル | 日本語 ONNX モデル（JVS データセット等） | Hugging Face 等から取得して `models/` に配置 |
+
+## 5. 将来拡張バックログ
+
+詳細は `future_extensions.md` を参照。
+
+- **ウェイクワード起動**（OpenWakeWord / Porcupine）— ボタン不要の常時待機
+- **ローカルドキュメント検索**（ChromaDB / FAISS）— プライベート RAG の追加
+- **会話コンテキスト保持**（`conversation_history.py` + sliding window memory）— マルチターン対話
