@@ -24,6 +24,11 @@ def test_default_config_values():
     assert config.PIPER_CONFIG_PATH == "./models/config.json"
     assert config.STATUS_LED_ENABLED is True
     assert config.STATUS_LED_PIN == 23
+    assert config.PUSH_TO_TALK_ENABLED is True
+    assert config.PTT_BUTTON_PIN == 17
+    assert config.PTT_BOUNCE_TIME == 0.05
+    assert config.PTT_MIN_RECORD_SECONDS == 0.5
+    assert config.PTT_MAX_RECORD_SECONDS == 30
     assert config.DEBUG_AUDIO_DIR == ""
 
 
@@ -33,6 +38,9 @@ def test_config_reads_environment(monkeypatch):
     monkeypatch.setenv("OLLAMA_MODEL", "llama3:8b")
     monkeypatch.setenv("STATUS_LED_ENABLED", "false")
     monkeypatch.setenv("STATUS_LED_PIN", "21")
+    monkeypatch.setenv("PUSH_TO_TALK_ENABLED", "false")
+    monkeypatch.setenv("PTT_BUTTON_PIN", "27")
+    monkeypatch.setenv("PTT_MAX_RECORD_SECONDS", "45")
 
     import src.config
     importlib.reload(src.config)
@@ -41,12 +49,18 @@ def test_config_reads_environment(monkeypatch):
     assert src.config.OLLAMA_MODEL == "llama3:8b"
     assert src.config.STATUS_LED_ENABLED is False
     assert src.config.STATUS_LED_PIN == 21
+    assert src.config.PUSH_TO_TALK_ENABLED is False
+    assert src.config.PTT_BUTTON_PIN == 27
+    assert src.config.PTT_MAX_RECORD_SECONDS == 45
 
     # Reset
     monkeypatch.delenv("SEARXNG_URL")
     monkeypatch.delenv("OLLAMA_MODEL")
     monkeypatch.delenv("STATUS_LED_ENABLED")
     monkeypatch.delenv("STATUS_LED_PIN")
+    monkeypatch.delenv("PUSH_TO_TALK_ENABLED")
+    monkeypatch.delenv("PTT_BUTTON_PIN")
+    monkeypatch.delenv("PTT_MAX_RECORD_SECONDS")
     importlib.reload(src.config)
 
 
