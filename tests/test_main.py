@@ -57,7 +57,6 @@ def test_listen_and_respond_low_audio(voice_assistant):
 
     voice_assistant.speaker.speak.assert_called_once_with("音声が検出されませんでした。")
     assert voice_assistant.status_led.set_state.call_args_list == [
-        call(LedState.LISTENING),
         call(LedState.IDLE),
     ]
 
@@ -72,7 +71,6 @@ def test_listen_and_respond_empty_transcription(voice_assistant):
 
     voice_assistant.retriever.search_web.assert_not_called()
     assert voice_assistant.status_led.set_state.call_args_list == [
-        call(LedState.LISTENING),
         call(LedState.IDLE),
     ]
 
@@ -97,10 +95,6 @@ def test_listen_and_respond_successful_flow(voice_assistant):
     voice_assistant.brain.generate_response.assert_called_once_with("プロンプト")
     voice_assistant.speaker.speak.assert_called_once_with("今日は晴れです")
     assert voice_assistant.status_led.set_state.call_args_list == [
-        call(LedState.LISTENING),
-        call(LedState.SEARCHING),
-        call(LedState.THINKING),
-        call(LedState.SPEAKING),
         call(LedState.IDLE),
     ]
 
@@ -111,7 +105,6 @@ def test_listen_and_respond_recording_failure(voice_assistant):
     with pytest.raises(ListenerError):
         voice_assistant.listen_and_respond()
     assert voice_assistant.status_led.set_state.call_args_list == [
-        call(LedState.LISTENING),
         call(LedState.ERROR),
     ]
 
@@ -130,10 +123,6 @@ def test_listen_and_respond_search_failure_degrades_gracefully(voice_assistant):
     voice_assistant.composer.compose_prompt.assert_called_once_with("テスト", [])
     voice_assistant.speaker.speak.assert_called_once_with("回答")
     assert voice_assistant.status_led.set_state.call_args_list == [
-        call(LedState.LISTENING),
-        call(LedState.SEARCHING),
-        call(LedState.THINKING),
-        call(LedState.SPEAKING),
         call(LedState.IDLE),
     ]
 
@@ -150,9 +139,6 @@ def test_listen_and_respond_generation_failure(voice_assistant):
     with pytest.raises(GenerationError):
         voice_assistant.listen_and_respond()
     assert voice_assistant.status_led.set_state.call_args_list == [
-        call(LedState.LISTENING),
-        call(LedState.SEARCHING),
-        call(LedState.THINKING),
         call(LedState.ERROR),
     ]
 
@@ -227,10 +213,6 @@ def test_push_to_talk_turn_successful_flow(voice_assistant):
     voice_assistant.listener.stop_recording.assert_called_once()
     voice_assistant.speaker.speak.assert_called_once_with("晴れです")
     assert voice_assistant.status_led.set_state.call_args_list == [
-        call(LedState.LISTENING),
-        call(LedState.SEARCHING),
-        call(LedState.THINKING),
-        call(LedState.SPEAKING),
         call(LedState.IDLE),
     ]
 
@@ -249,7 +231,6 @@ def test_push_to_talk_turn_discards_short_press(voice_assistant):
     voice_assistant.listener.transcribe.assert_not_called()
     voice_assistant.speaker.speak.assert_not_called()
     assert voice_assistant.status_led.set_state.call_args_list == [
-        call(LedState.LISTENING),
         call(LedState.IDLE),
     ]
 

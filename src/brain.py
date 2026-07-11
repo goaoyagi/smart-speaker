@@ -9,19 +9,23 @@ from .config import OLLAMA_API_URL, OLLAMA_MODEL, validate_url
 from .http_client import http_post_json
 from .audio_utils import log_init, log_ready
 from .exceptions import GenerationError
+from .status_led import LedState
 
 logger = logging.getLogger(__name__)
 
 
 class Brain:
-    def __init__(self):
+    def __init__(self, status_led=None):
         log_init("Brain (Ollama)")
+        self._status_led = status_led
         self.ollama_api_url = validate_url(OLLAMA_API_URL, "OLLAMA_API_URL")
         self.ollama_model = OLLAMA_MODEL
         log_ready("Brain")
 
     def generate_response(self, prompt):
         """Generate response using Ollama/Qwen 2.5 with search context"""
+        if self._status_led is not None:
+            self._status_led.set_state(LedState.THINKING)
         if not isinstance(prompt, str) or not prompt.strip():
             return "申し訳ありませんが、質問が空です。"
         prompt = prompt[:10000]

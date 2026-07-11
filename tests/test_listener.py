@@ -14,6 +14,7 @@ sys.modules['faster_whisper'] = MagicMock()
 
 from src.listener import Listener
 from src.exceptions import ListenerError
+from src.status_led import LedState
 
 
 @pytest.fixture
@@ -140,3 +141,44 @@ def test_stop_recording_detects_early_failure(listener):
         with pytest.raises(ListenerError, match="Audio recording failed"):
             listener.stop_recording()
         assert listener._record_proc is None
+
+
+def test_record_audio_sets_listening_led():
+    """record_audio signals LISTENING on the status LED when provided."""
+    mock_led = MagicMock()
+    listener = Listener(status_led=mock_led)
+    mock_wav_cm = MagicMock()
+    mock_wav_file = MagicMock()
+    mock_wav_file.getnframes.return_value = 16000
+    mock_wav_file.readframes.return_value = b'\x00' * 32000
+    mock_wav_cm.__enter__.return_value = mock_wav_file
+
+    with patch('src.listener.subprocess.run'), \
+         patch('src.listener.wave.open', return_value=mock_wav_cm), \
+         patch('src.audio_utils.os.path.exists', return_value=True), \
+         patch('src.audio_utils.os.unlink'), \
+         patch('src.audio_utils.tempfile.mkstemp', return_value=(3, '/tmp/test.wav')), \
+         patch('src.audio_utils.os.close'):
+        listener.record_audio(duration=1)
+
+    mock_led.set_state.assert_called_once_with(LedState.LISTENING)
+
+
+def test_start_recording_sets_listening_led():
+    """start_recording signals LISTENING on the status LED when provided."""
+    mock_led = MagicMock()
+    listener = Listener(status_led=mock_led)
+    mock_proc = MagicMock()
+    mock_proc.returncode = -15
+    mock_proc.communicate.return_value = (b'', b'')
+
+    with patch('src.listener.subprocess.Popen', return_value=mock_proc), \
+         patch('src.listener.wave.open', return_value=_mock_wav()), \
+         patch('src.audio_utils.os.path.exists', return_value=True), \
+         patch('src.audio_utils.os.unlink'), \
+         patch('src.audio_utils.tempfile.mkstemp', return_value=(3, '/tmp/test.wav')), \
+         patch('src.audio_utils.os.close'):
+        listener.start_recording()
+        listener.stop_recording()
+
+    mock_led.set_state.assert_called_once_with(LedState.LISTENING)

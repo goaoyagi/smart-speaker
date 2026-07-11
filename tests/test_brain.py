@@ -8,6 +8,8 @@ import requests
 from unittest.mock import Mock, patch
 from src.brain import Brain
 from src.exceptions import GenerationError
+from src.status_led import LedState
+from unittest.mock import MagicMock
 
 
 @pytest.fixture
@@ -63,3 +65,17 @@ def test_generate_response_none_prompt(brain):
     """Test AI response generation with None prompt"""
     result = brain.generate_response(None)
     assert "質問が空です" in result
+
+
+def test_generate_response_sets_thinking_led():
+    """generate_response signals THINKING on the status LED when provided."""
+    mock_led = MagicMock()
+    brain = Brain(status_led=mock_led)
+    mock_response = Mock()
+    mock_response.json.return_value = {'response': 'テスト回答'}
+    mock_response.raise_for_status = Mock()
+
+    with patch('src.http_client.requests.post', return_value=mock_response):
+        brain.generate_response("テストプロンプト")
+
+    mock_led.set_state.assert_called_once_with(LedState.THINKING)

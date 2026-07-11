@@ -13,6 +13,7 @@ sys.modules['piper'] = MagicMock()
 
 from src.speaker import Speaker
 from src.exceptions import SpeakerError
+from src.status_led import LedState
 
 
 @pytest.fixture
@@ -51,3 +52,19 @@ def test_speak_playback_failure(speaker):
 
         with pytest.raises(SpeakerError, match="Audio playback failed"):
             speaker.speak("テスト音声")
+
+
+def test_speak_sets_speaking_led():
+    """speak signals SPEAKING on the status LED when provided."""
+    mock_led = MagicMock()
+    speaker = Speaker(status_led=mock_led)
+
+    with patch('src.audio_utils.tempfile.mkstemp', return_value=(3, '/tmp/test.wav')), \
+         patch('src.audio_utils.os.close'), \
+         patch('src.speaker.wave.open'), \
+         patch('src.speaker.subprocess.run'), \
+         patch('src.audio_utils.os.path.exists', return_value=True), \
+         patch('src.audio_utils.os.unlink'):
+        speaker.speak("テスト音声")
+
+    mock_led.set_state.assert_called_once_with(LedState.SPEAKING)

@@ -14,6 +14,7 @@ import os
 from .config import MIC_DEVICE, SAMPLE_RATE, CHANNELS, RECORD_SECONDS, WHISPER_MODEL_SIZE, DEBUG_AUDIO_DIR
 from .audio_utils import TempWavFile, log_init, log_ready
 from .exceptions import ListenerError
+from .status_led import LedState
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +24,9 @@ _STOP_TIMEOUT = 2.0
 
 
 class Listener:
-    def __init__(self):
+    def __init__(self, status_led=None):
         log_init("Listener (Whisper)")
+        self._status_led = status_led
         self.whisper_model = WhisperModel(
             WHISPER_MODEL_SIZE,
             device="cpu",
@@ -74,6 +76,8 @@ class Listener:
 
     def record_audio(self, duration=RECORD_SECONDS):
         """Record audio from USB microphone using arecord (fixed duration)."""
+        if self._status_led is not None:
+            self._status_led.set_state(LedState.LISTENING)
         logger.info("Recording for %d seconds...", duration)
 
         with TempWavFile() as temp_file:
@@ -106,6 +110,8 @@ class Listener:
         temp_path = self._record_file.__enter__()
         cmd = self._arecord_cmd(temp_path)
 
+        if self._status_led is not None:
+            self._status_led.set_state(LedState.LISTENING)
         logger.info("Recording started (push-to-talk)...")
         try:
             self._record_proc = subprocess.Popen(
