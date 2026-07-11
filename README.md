@@ -10,6 +10,7 @@
 4. **[脳] brain.py**: プロンプトを Ollama（Qwen2.5:3b）に投入し、事実に基づく回答を生成
 5. **[口] speaker.py**: `piper-tts-plus` で音声合成して発話
 6. **[視覚] status_led.py**: GPIO接続のLEDで、待機・聞き取り・検索・思考・発話・エラーを表示
+7. **[操作] push_to_talk.py**: GPIO接続のボタンを押している間だけ録音するプッシュ・トゥ・トーク
 
 ## 必要依存ライブラリ
 
@@ -91,6 +92,7 @@ smart-speaker/
 │   ├── brain.py            # Ollama AI生成
 │   ├── speaker.py          # Piper-Plus TTS
 │   ├── status_led.py       # GPIO ステータスLED制御
+│   ├── push_to_talk.py     # GPIOボタンによるプッシュ・トゥ・トーク
 │   ├── config.py           # 環境変数の一元管理・URL検証
 │   ├── http_client.py      # 共通HTTPクライアント
 │   ├── exceptions.py       # ドメイン固有の例外
@@ -105,6 +107,7 @@ smart-speaker/
     ├── test_brain.py
     ├── test_speaker.py
     ├── test_status_led.py
+    ├── test_push_to_talk.py
     ├── test_config.py
     ├── test_http_client.py
     └── test_audio_utils.py
@@ -114,4 +117,5 @@ smart-speaker/
 
 - **speaker.py**: 本家Piper（espeak-ng依存）は日本語のアクセント解析が未対応のため、必ず `piper-tts-plus` を使用すること
 - **status_led.py**: `gpiozero` は Raspberry Pi 上でのみ動作するため、非Pi環境では自動的に無効化される
+- **push_to_talk.py**: GPIOボタンが利用できる環境では「押している間だけ録音」するプッシュ・トゥ・トークで動作する。ボタンが無い非Pi環境では自動的に無効化され、`RECORD_SECONDS` の固定秒数録音にフォールバックする。`PTT_MIN_RECORD_SECONDS` / `PTT_MAX_RECORD_SECONDS` で最小・最大録音時間を制御する
 - **テスト実行時**: 外部API（SearXNG/Ollama）にリクエストを飛ばさず、`pytest-mock` でモック化すること
