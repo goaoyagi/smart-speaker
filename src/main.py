@@ -30,12 +30,12 @@ class VoiceAssistant:
         print("Initializing Voice Assistant...")
 
         # Initialize all components
-        self.listener = Listener()
-        self.retriever = Retriever()
-        self.composer = Composer()
-        self.brain = Brain()
-        self.speaker = Speaker()
         self.status_led = StatusLED()
+        self.listener = Listener(status_led=self.status_led)
+        self.retriever = Retriever(status_led=self.status_led)
+        self.composer = Composer()
+        self.brain = Brain(status_led=self.status_led)
+        self.speaker = Speaker(status_led=self.status_led)
         self.button = PushToTalkButton()
 
         print("Voice Assistant initialized!")
@@ -53,7 +53,6 @@ class VoiceAssistant:
         logger.info("Voice Assistant Ready — Speak now (will record for 10 seconds)...")
 
         try:
-            self.status_led.set_state(LedState.LISTENING)
             try:
                 audio_array = self.listener.record_audio()
             except ListenerError as e:
@@ -83,7 +82,6 @@ class VoiceAssistant:
 
     def _push_to_talk_turn(self):
         """Record while the button is held, then run the response pipeline."""
-        self.status_led.set_state(LedState.LISTENING)
         self.listener.start_recording()
         pressed_at = time.monotonic()
 
@@ -122,7 +120,6 @@ class VoiceAssistant:
             return
 
         # --- Web search (non-fatal: degrade to no-context prompt) ---
-        self.status_led.set_state(LedState.SEARCHING)
         try:
             search_results = self.retriever.search_web(text)
         except SearchError as e:
@@ -130,7 +127,6 @@ class VoiceAssistant:
             search_results = []
 
         # --- Compose & generate ---
-        self.status_led.set_state(LedState.THINKING)
         prompt = self.composer.compose_prompt(text, search_results)
 
         try:
@@ -141,7 +137,6 @@ class VoiceAssistant:
             raise
 
         # --- Speak ---
-        self.status_led.set_state(LedState.SPEAKING)
         try:
             self.speaker.speak(response)
         except SpeakerError as e:

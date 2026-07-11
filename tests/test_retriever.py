@@ -8,6 +8,8 @@ import requests
 from unittest.mock import Mock, patch
 from src.retriever import Retriever
 from src.exceptions import SearchError
+from src.status_led import LedState
+from unittest.mock import MagicMock
 
 
 @pytest.fixture
@@ -52,3 +54,17 @@ def test_search_web_timeout(retriever):
                side_effect=requests.exceptions.Timeout("timed out")):
         with pytest.raises(SearchError, match="timed out"):
             retriever.search_web("test query")
+
+
+def test_search_web_sets_searching_led():
+    """search_web signals SEARCHING on the status LED when provided."""
+    mock_led = MagicMock()
+    retriever = Retriever(status_led=mock_led)
+    mock_response = Mock()
+    mock_response.json.return_value = {'results': []}
+    mock_response.raise_for_status = Mock()
+
+    with patch('src.http_client.requests.get', return_value=mock_response):
+        retriever.search_web("test query")
+
+    mock_led.set_state.assert_called_once_with(LedState.SEARCHING)

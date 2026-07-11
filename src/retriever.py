@@ -9,18 +9,22 @@ from .config import SEARXNG_URL, validate_url
 from .http_client import http_get_json
 from .audio_utils import log_init, log_ready
 from .exceptions import SearchError
+from .status_led import LedState
 
 logger = logging.getLogger(__name__)
 
 
 class Retriever:
-    def __init__(self):
+    def __init__(self, status_led=None):
         log_init("Retriever (SearXNG)")
+        self._status_led = status_led
         self.searxng_url = validate_url(SEARXNG_URL, "SEARXNG_URL")
         log_ready("Retriever")
 
     def search_web(self, query):
         """Search web using local SearXNG"""
+        if self._status_led is not None:
+            self._status_led.set_state(LedState.SEARCHING)
         if not isinstance(query, str) or not query.strip():
             print("Empty or invalid query")
             return []
