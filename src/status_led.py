@@ -57,7 +57,7 @@ class StatusLED:
             elif state == LedState.THINKING:
                 self._led.blink(0.5, 0.5)
             elif state == LedState.SPEAKING:
-                self._led.on()
+                self._led.blink(0.25, 0.25)
             elif state == LedState.ERROR:
                 self._led.blink(0.08, 0.08)
         except Exception as e:
