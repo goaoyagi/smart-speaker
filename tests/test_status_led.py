@@ -44,7 +44,7 @@ def test_status_led_state_mapping():
         mock_led.reset_mock()
 
         status_led.set_state(LedState.SPEAKING)
-        mock_led.on.assert_called_once_with()
+        mock_led.blink.assert_called_once_with(0.25, 0.25)
         mock_led.reset_mock()
 
         status_led.set_state(LedState.ERROR)
