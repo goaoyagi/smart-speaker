@@ -159,6 +159,7 @@ class Listener:
                 self._record_proc.communicate(timeout=_STOP_TIMEOUT)
             except (subprocess.TimeoutExpired, OSError):
                 self._record_proc.kill()
+                self._record_proc.communicate()
             self._record_proc = None
         self._cleanup_record_file()
 
