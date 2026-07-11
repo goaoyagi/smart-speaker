@@ -102,7 +102,7 @@ class VoiceAssistant:
 
     def _handle_audio(self, audio_array):
         """Validate, transcribe, search, generate and speak for one turn."""
-        max_level = np.max(np.abs(audio_array))
+        max_level = np.max(np.abs(audio_array)) if audio_array.size else 0.0
         if max_level < 0.03:
             logger.info("No speech detected (audio level too low: %.4f).", max_level)
             self._safe_speak("音声が検出されませんでした。")
