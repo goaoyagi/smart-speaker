@@ -53,6 +53,10 @@ SPEAKER_DEVICE = os.getenv("SPEAKER_DEVICE", "plughw:0,0")
 PIPER_MODEL_PATH = os.getenv("PIPER_MODEL_PATH", "./models/tsukuyomi.onnx")
 PIPER_CONFIG_PATH = os.getenv("PIPER_CONFIG_PATH", "./models/config.json")
 
+# Conversation history (multi-turn dialogue) settings
+CONVERSATION_MAX_TURNS = int(os.getenv("CONVERSATION_MAX_TURNS", "3"))
+CONVERSATION_ANSWER_CLIP = int(os.getenv("CONVERSATION_ANSWER_CLIP", "200"))
+
 # Status LED (GPIO) settings
 STATUS_LED_ENABLED = os.getenv("STATUS_LED_ENABLED", "true").lower() in ("1", "true", "yes")
 STATUS_LED_PIN = int(os.getenv("STATUS_LED_PIN", "23"))

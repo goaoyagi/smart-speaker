@@ -11,6 +11,7 @@ from .retriever import Retriever
 from .composer import Composer
 from .brain import Brain
 from .speaker import Speaker
+from .conversation_history import ConversationHistory
 from .status_led import StatusLED, LedState
 from .push_to_talk import PushToTalkButton
 from .config import PTT_MIN_RECORD_SECONDS, PTT_MAX_RECORD_SECONDS
@@ -35,6 +36,7 @@ class VoiceAssistant:
         self.composer = Composer()
         self.brain = Brain()
         self.speaker = Speaker()
+        self.history = ConversationHistory()
         self.status_led = StatusLED()
         self.button = PushToTalkButton()
 
@@ -121,6 +123,20 @@ class VoiceAssistant:
             self.status_led.set_state(LedState.IDLE)
             return
 
+        # --- Repeat command: re-speak the previous answer without search/LLM ---
+        if self.history.is_repeat_command(text):
+            last = self.history.last_answer()
+            if last:
+                logger.info("Repeat command detected; re-speaking previous answer.")
+            else:
+                logger.info("Repeat command detected but history is empty.")
+            try:
+                self.speaker.speak(last or "まだお答えできる内容がありません。")
+            except SpeakerError as e:
+                logger.error("Speech output failed: %s", e)
+                raise
+            return
+
         # --- Web search (non-fatal: degrade to no-context prompt) ---
         self.status_led.set_state(LedState.SEARCHING)
         try:
@@ -129,9 +145,10 @@ class VoiceAssistant:
             logger.warning("Search failed, proceeding without context: %s", e)
             search_results = []
 
-        # --- Compose & generate ---
+        # --- Compose & generate (include condensed conversation history) ---
         self.status_led.set_state(LedState.THINKING)
-        prompt = self.composer.compose_prompt(text, search_results)
+        history_context = self.history.as_condensed_context()
+        prompt = self.composer.compose_prompt(text, search_results, history_context)
 
         try:
             response = self.brain.generate_response(prompt)
@@ -147,6 +164,9 @@ class VoiceAssistant:
         except SpeakerError as e:
             logger.error("Speech output failed: %s", e)
             raise
+
+        # --- Record the completed turn for multi-turn context ---
+        self.history.add(text, response)
 
         self.status_led.set_state(LedState.IDLE)
 
