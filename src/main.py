@@ -4,6 +4,7 @@ Main orchestrator - Coordinates all components for voice assistant
 """
 
 import logging
+import time
 import numpy as np
 from .listener import Listener
 from .retriever import Retriever
@@ -11,7 +12,11 @@ from .composer import Composer
 from .brain import Brain
 from .speaker import Speaker
 from .conversation_history import ConversationHistory
+from .status_led import StatusLED, LedState
+from .push_to_talk import PushToTalkButton
+from .config import PTT_MIN_RECORD_SECONDS, PTT_MAX_RECORD_SECONDS
 from .exceptions import (
+    VoiceAssistantError,
     ListenerError,
     SearchError,
     GenerationError,
@@ -32,24 +37,78 @@ class VoiceAssistant:
         self.brain = Brain()
         self.speaker = Speaker()
         self.history = ConversationHistory()
+        self.status_led = StatusLED()
+        self.button = PushToTalkButton()
 
         print("Voice Assistant initialized!")
 
+    def run(self):
+        """Run the assistant using push-to-talk when a button is available,
+        otherwise fall back to a single fixed-duration recording."""
+        if self.button.available:
+            self.run_push_to_talk()
+        else:
+            self.listen_and_respond()
+
     def listen_and_respond(self):
-        """Main conversation loop"""
+        """Single conversation turn using fixed-duration recording."""
         logger.info("Voice Assistant Ready — Speak now (will record for 10 seconds)...")
 
-        # --- Record & validate audio ---
         try:
-            audio_array = self.listener.record_audio()
-        except ListenerError as e:
-            logger.error("Recording failed: %s", e)
+            self.status_led.set_state(LedState.LISTENING)
+            try:
+                audio_array = self.listener.record_audio()
+            except ListenerError as e:
+                logger.error("Recording failed: %s", e)
+                raise
+
+            self._handle_audio(audio_array)
+        except Exception:
+            self.status_led.set_state(LedState.ERROR)
             raise
 
-        max_level = np.max(np.abs(audio_array))
+    def run_push_to_talk(self):
+        """Event-driven loop: record while the button is held, then respond."""
+        logger.info("Push-to-talk ready — hold the button and speak...")
+
+        try:
+            while True:
+                self.status_led.set_state(LedState.IDLE)
+                self.button.wait_for_press()
+                try:
+                    self._push_to_talk_turn()
+                except VoiceAssistantError as e:
+                    logger.error("Conversation turn failed: %s", e)
+                    self.status_led.set_state(LedState.ERROR)
+        except KeyboardInterrupt:
+            logger.info("Interrupted by user.")
+
+    def _push_to_talk_turn(self):
+        """Record while the button is held, then run the response pipeline."""
+        self.status_led.set_state(LedState.LISTENING)
+        self.listener.start_recording()
+        pressed_at = time.monotonic()
+
+        if not self.button.wait_for_release(timeout=PTT_MAX_RECORD_SECONDS):
+            logger.info("Maximum recording time reached; stopping.")
+
+        held_for = time.monotonic() - pressed_at
+        audio_array = self.listener.stop_recording()
+
+        if held_for < PTT_MIN_RECORD_SECONDS:
+            logger.info("Button held too briefly (%.2fs); ignoring.", held_for)
+            self.status_led.set_state(LedState.IDLE)
+            return
+
+        self._handle_audio(audio_array)
+
+    def _handle_audio(self, audio_array):
+        """Validate, transcribe, search, generate and speak for one turn."""
+        max_level = np.max(np.abs(audio_array)) if audio_array.size else 0.0
         if max_level < 0.03:
             logger.info("No speech detected (audio level too low: %.4f).", max_level)
             self._safe_speak("音声が検出されませんでした。")
+            self.status_led.set_state(LedState.IDLE)
             return
 
         # --- Transcribe ---
@@ -61,6 +120,7 @@ class VoiceAssistant:
 
         if not text.strip():
             logger.info("No speech detected.")
+            self.status_led.set_state(LedState.IDLE)
             return
 
         # --- Repeat command: re-speak the previous answer without search/LLM ---
@@ -78,6 +138,7 @@ class VoiceAssistant:
             return
 
         # --- Web search (non-fatal: degrade to no-context prompt) ---
+        self.status_led.set_state(LedState.SEARCHING)
         try:
             search_results = self.retriever.search_web(text)
         except SearchError as e:
@@ -85,6 +146,7 @@ class VoiceAssistant:
             search_results = []
 
         # --- Compose & generate (include condensed conversation history) ---
+        self.status_led.set_state(LedState.THINKING)
         history_context = self.history.as_condensed_context()
         prompt = self.composer.compose_prompt(text, search_results, history_context)
 
@@ -96,6 +158,7 @@ class VoiceAssistant:
             raise
 
         # --- Speak ---
+        self.status_led.set_state(LedState.SPEAKING)
         try:
             self.speaker.speak(response)
         except SpeakerError as e:
@@ -104,6 +167,8 @@ class VoiceAssistant:
 
         # --- Record the completed turn for multi-turn context ---
         self.history.add(text, response)
+
+        self.status_led.set_state(LedState.IDLE)
 
     def _safe_speak(self, text):
         """Attempt to speak; log and continue if it fails."""
@@ -114,7 +179,8 @@ class VoiceAssistant:
 
     def cleanup(self):
         """Clean up resources"""
-        pass
+        self.status_led.close()
+        self.button.close()
 
 
 def main():
@@ -130,7 +196,7 @@ def main():
         raise SystemExit(1) from e
 
     try:
-        assistant.listen_and_respond()
+        assistant.run()
     except KeyboardInterrupt:
         logger.info("Interrupted by user.")
     except (ListenerError, SearchError, GenerationError, SpeakerError) as e:
