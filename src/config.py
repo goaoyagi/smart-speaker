@@ -56,6 +56,8 @@ PIPER_CONFIG_PATH = os.getenv("PIPER_CONFIG_PATH", "./models/config.json")
 # Conversation history (multi-turn dialogue) settings
 CONVERSATION_MAX_TURNS = int(os.getenv("CONVERSATION_MAX_TURNS", "3"))
 CONVERSATION_ANSWER_CLIP = int(os.getenv("CONVERSATION_ANSWER_CLIP", "200"))
+# History condensation mode: "template" (offline, no LLM) or "llm" (Ollama-based summary)
+CONVERSATION_SUMMARY_MODE = os.getenv("CONVERSATION_SUMMARY_MODE", "template")
 
 # Status LED (GPIO) settings
 STATUS_LED_ENABLED = os.getenv("STATUS_LED_ENABLED", "true").lower() in ("1", "true", "yes")
