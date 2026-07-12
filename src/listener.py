@@ -137,9 +137,20 @@ class Listener:
 
         self._record_proc = None
 
-        # arecord exits with a non-zero status when terminated by a signal;
-        # only treat it as an error if it failed before we asked it to stop.
-        if proc.returncode not in (0, None) and proc.returncode >= 0:
+        # arecord exits with a non-zero status when terminated by a signal.
+        # It catches SIGTERM/SIGINT and exits cleanly with code 1, printing "Aborted by signal" to stderr.
+        # We only treat it as an error if it's not a clean exit (0 or None) and not a signal abort.
+        is_error = False
+        if proc.returncode not in (0, None):
+            is_error = True
+            # If it exited with code 1 due to signal termination, it's not a real error.
+            if proc.returncode == 1 and stderr and b"Aborted by signal" in stderr:
+                is_error = False
+            # Also allow negative return codes which represent unhandled signal terminations (like -15).
+            if proc.returncode < 0:
+                is_error = False
+
+        if is_error:
             self._cleanup_record_file()
             message = stderr.decode(errors='replace').strip() if stderr else ""
             raise ListenerError(

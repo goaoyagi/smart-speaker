@@ -27,8 +27,8 @@ pip install faster-whisper piper-tts-plus requests
 または既存の仮想環境を使用:
 ```bash
 # 仮想環境をアクティベート
-source /path/to/your/venv/bin/activate
-python3 src/main.py
+source venv/bin/activate
+python3 -m src.main
 ```
 
 ## セットアップ
@@ -57,19 +57,31 @@ python3 src/main.py
 
 ## 実行
 
+相対インポートを使用しているため、モジュール形式（`-m`）で実行する必要があります。
+
 ```bash
-# 仮想環境を使用
+# 仮想環境をアクティベート
 source venv/bin/activate
-python3 src/main.py
+python3 -m src.main
 
 # またはシステムPythonを使用
-python3 src/main.py
+python3 -m src.main
 ```
 
 ## テスト
 
+### ソフトウェアテスト
+
+ユニットテストを実行します：
 ```bash
 python3 -m pytest tests/ -v
+```
+
+### ハードウェアの物理動作確認
+
+Raspberry Piに接続したLEDやボタンが物理的に正しく配線されているか確認するためのテストモジュールです。ボタンを押している間LEDが点灯します：
+```bash
+python3 src/button_led_test.py
 ```
 
 ## ディレクトリ構成

@@ -9,6 +9,30 @@ Also provides shared URL validation (previously duplicated in retriever and brai
 import os
 from urllib.parse import urlparse
 
+import sys
+
+# Load .env file manually from the project root directory, unless running unit tests
+is_testing = "pytest" in sys.modules or any("pytest" in arg for arg in sys.argv)
+if not is_testing:
+    _env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    if os.path.exists(_env_path):
+        with open(_env_path, "r", encoding="utf-8") as _f:
+            for _line in _f:
+                _line = _line.strip()
+                if not _line or _line.startswith("#"):
+                    continue
+                if "=" in _line:
+                    _key, _val = _line.split("=", 1)
+                    _key = _key.strip()
+                    _val = _val.strip()
+                    if _val.startswith(('"', "'")) and _val.endswith(_val[0]):
+                        _val = _val[1:-1]
+                    if _key not in os.environ:
+                        os.environ[_key] = _val
+
+
+
+
 # Listener (Whisper) settings
 MIC_DEVICE = os.getenv("MIC_DEVICE", "hw:0,0")
 SAMPLE_RATE = int(os.getenv("SAMPLE_RATE", "16000"))
