@@ -58,6 +58,8 @@ CONVERSATION_MAX_TURNS = int(os.getenv("CONVERSATION_MAX_TURNS", "3"))
 CONVERSATION_ANSWER_CLIP = int(os.getenv("CONVERSATION_ANSWER_CLIP", "200"))
 # History condensation mode: "template" (offline, no LLM) or "llm" (Ollama-based summary)
 CONVERSATION_SUMMARY_MODE = os.getenv("CONVERSATION_SUMMARY_MODE", "template")
+# Continuous multi-turn loop: keep listening after each answer until an exit command
+CONVERSATION_CONTINUOUS = os.getenv("CONVERSATION_CONTINUOUS", "false").lower() in ("1", "true", "yes")
 
 # Status LED (GPIO) settings
 STATUS_LED_ENABLED = os.getenv("STATUS_LED_ENABLED", "true").lower() in ("1", "true", "yes")

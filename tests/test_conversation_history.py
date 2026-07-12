@@ -69,6 +69,27 @@ def test_is_repeat_command_false(history, text):
     assert history.is_repeat_command(text) is False
 
 
+@pytest.mark.parametrize("text", [
+    "終了",
+    "さようなら",
+    "バイバイ",
+    "おやすみ",
+    "会話をやめて",
+    "  会話を 終わって ",
+])
+def test_is_exit_command_true(history, text):
+    assert history.is_exit_command(text) is True
+
+
+@pytest.mark.parametrize("text", [
+    "今日の天気は？",
+    "",
+    "もう一回言って",
+])
+def test_is_exit_command_false(history, text):
+    assert history.is_exit_command(text) is False
+
+
 def test_condensed_context_format(history):
     history.add("東京の天気は？", "晴れです。")
     context = history.as_condensed_context()

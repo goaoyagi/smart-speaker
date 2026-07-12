@@ -14,7 +14,12 @@ from .speaker import Speaker
 from .conversation_history import ConversationHistory
 from .status_led import StatusLED, LedState
 from .push_to_talk import PushToTalkButton
-from .config import PTT_MIN_RECORD_SECONDS, PTT_MAX_RECORD_SECONDS, CONVERSATION_SUMMARY_MODE
+from .config import (
+    PTT_MIN_RECORD_SECONDS,
+    PTT_MAX_RECORD_SECONDS,
+    CONVERSATION_SUMMARY_MODE,
+    CONVERSATION_CONTINUOUS,
+)
 from .exceptions import (
     VoiceAssistantError,
     ListenerError,
@@ -48,14 +53,23 @@ class VoiceAssistant:
 
     def run(self):
         """Run the assistant using push-to-talk when a button is available,
-        otherwise fall back to a single fixed-duration recording."""
+        otherwise use a fixed-duration recording (continuous loop when enabled)."""
         if self.button.available:
             self.run_push_to_talk()
+        elif CONVERSATION_CONTINUOUS:
+            logger.info("Starting continuous conversation mode.")
+            while self.listen_and_respond():
+                pass
+            logger.info("Continuous conversation mode ended.")
         else:
             self.listen_and_respond()
 
     def listen_and_respond(self):
-        """Single conversation turn using fixed-duration recording."""
+        """Single fixed-duration recording turn.
+
+        Returns True if the assistant should keep listening (continuous mode),
+        or False when an exit command was received.
+        """
         logger.info("Voice Assistant Ready — Speak now (will record for 10 seconds)...")
 
         try:
@@ -66,7 +80,7 @@ class VoiceAssistant:
                 logger.error("Recording failed: %s", e)
                 raise
 
-            self._handle_audio(audio_array)
+            return self._handle_audio(audio_array)
         except Exception:
             self.status_led.set_state(LedState.ERROR)
             raise
@@ -80,7 +94,8 @@ class VoiceAssistant:
                 self.status_led.set_state(LedState.IDLE)
                 self.button.wait_for_press()
                 try:
-                    self._push_to_talk_turn()
+                    if not self._push_to_talk_turn():
+                        break
                 except VoiceAssistantError as e:
                     logger.error("Conversation turn failed: %s", e)
                     self.status_led.set_state(LedState.ERROR)
@@ -102,9 +117,9 @@ class VoiceAssistant:
         if held_for < PTT_MIN_RECORD_SECONDS:
             logger.info("Button held too briefly (%.2fs); ignoring.", held_for)
             self.status_led.set_state(LedState.IDLE)
-            return
+            return True
 
-        self._handle_audio(audio_array)
+        return self._handle_audio(audio_array)
 
     def _handle_audio(self, audio_array):
         """Validate, transcribe, search, generate and speak for one turn."""
@@ -113,7 +128,7 @@ class VoiceAssistant:
             logger.info("No speech detected (audio level too low: %.4f).", max_level)
             self._safe_speak("音声が検出されませんでした。")
             self.status_led.set_state(LedState.IDLE)
-            return
+            return True
 
         # --- Transcribe ---
         try:
@@ -125,7 +140,14 @@ class VoiceAssistant:
         if not text.strip():
             logger.info("No speech detected.")
             self.status_led.set_state(LedState.IDLE)
-            return
+            return True
+
+        # --- Exit command: end the continuous loop ---
+        if self.history.is_exit_command(text):
+            logger.info("Exit command detected; ending conversation.")
+            self._safe_speak("さようなら。")
+            self.status_led.set_state(LedState.IDLE)
+            return False
 
         # --- Repeat command: re-speak the previous answer without search/LLM ---
         if self.history.is_repeat_command(text):
@@ -139,7 +161,8 @@ class VoiceAssistant:
             except SpeakerError as e:
                 logger.error("Speech output failed: %s", e)
                 raise
-            return
+            self.status_led.set_state(LedState.IDLE)
+            return True
 
         # --- Web search (non-fatal: degrade to no-context prompt) ---
         self.status_led.set_state(LedState.SEARCHING)
@@ -173,6 +196,7 @@ class VoiceAssistant:
         self.history.add(text, response)
 
         self.status_led.set_state(LedState.IDLE)
+        return True
 
     def _safe_speak(self, text):
         """Attempt to speak; log and continue if it fails."""

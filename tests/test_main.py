@@ -164,6 +164,78 @@ def test_listen_and_respond_repeat_command_empty_history(voice_assistant):
     voice_assistant.speaker.speak.assert_called_once_with("まだお答えできる内容がありません。")
 
 
+def test_listen_and_respond_returns_true_on_success(voice_assistant):
+    """A normal turn signals the loop to continue"""
+    audio = np.full(16000, 0.5, dtype=np.float32)
+    voice_assistant.listener.record_audio.return_value = audio
+    voice_assistant.listener.transcribe.return_value = "質問"
+    voice_assistant.retriever.search_web.return_value = []
+    voice_assistant.composer.compose_prompt.return_value = "prompt"
+    voice_assistant.brain.generate_response.return_value = "回答"
+
+    assert voice_assistant.listen_and_respond() is True
+
+
+def test_listen_and_respond_exit_command_stops_loop(voice_assistant):
+    """An exit command speaks goodbye, skips search/LLM, and returns False"""
+    audio = np.full(16000, 0.5, dtype=np.float32)
+    voice_assistant.listener.record_audio.return_value = audio
+    voice_assistant.listener.transcribe.return_value = "さようなら"
+
+    result = voice_assistant.listen_and_respond()
+
+    assert result is False
+    voice_assistant.retriever.search_web.assert_not_called()
+    voice_assistant.brain.generate_response.assert_not_called()
+    voice_assistant.speaker.speak.assert_called_once_with("さようなら。")
+
+
+def test_run_loops_until_exit_command(voice_assistant):
+    """Without a button and with continuous mode, run() loops until False"""
+    voice_assistant.button.available = False
+    with patch('src.main.CONVERSATION_CONTINUOUS', True), \
+         patch.object(voice_assistant, 'listen_and_respond',
+                      side_effect=[True, True, False]) as mock_turn:
+        voice_assistant.run()
+    assert mock_turn.call_count == 3
+
+
+def test_run_single_turn_when_not_continuous(voice_assistant):
+    """Without a button and continuous disabled, run() handles a single turn"""
+    voice_assistant.button.available = False
+    with patch('src.main.CONVERSATION_CONTINUOUS', False), \
+         patch.object(voice_assistant, 'listen_and_respond',
+                      return_value=True) as mock_turn:
+        voice_assistant.run()
+    mock_turn.assert_called_once()
+
+
+def test_run_uses_push_to_talk_when_button_available(voice_assistant):
+    """run() delegates to the PTT loop when a button is available"""
+    voice_assistant.button.available = True
+    with patch.object(voice_assistant, 'run_push_to_talk') as mock_ptt, \
+         patch.object(voice_assistant, 'listen_and_respond') as mock_turn:
+        voice_assistant.run()
+    mock_ptt.assert_called_once()
+    mock_turn.assert_not_called()
+
+
+def test_main_continuous_mode_calls_run():
+    """main() uses run() when continuous mode is enabled"""
+    with patch('src.main.Listener'), \
+         patch('src.main.Retriever'), \
+         patch('src.main.Composer'), \
+         patch('src.main.Brain'), \
+         patch('src.main.Speaker'), \
+         patch('src.main.CONVERSATION_CONTINUOUS', True):
+        with patch.object(VoiceAssistant, 'run') as mock_run, \
+             patch.object(VoiceAssistant, 'listen_and_respond') as mock_turn, \
+             patch.object(VoiceAssistant, 'cleanup'):
+            main()
+            mock_run.assert_called_once()
+            mock_turn.assert_not_called()
+
+
 def test_listen_and_respond_recording_failure(voice_assistant):
     """Test that ListenerError propagates from record_audio"""
     voice_assistant.listener.record_audio.side_effect = ListenerError("mic broken")
