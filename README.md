@@ -131,3 +131,4 @@ smart-speaker/
 - **status_led.py**: `gpiozero` は Raspberry Pi 上でのみ動作するため、非Pi環境では自動的に無効化される
 - **push_to_talk.py**: GPIOボタンが利用できる環境では「押している間だけ録音」するプッシュ・トゥ・トークで動作する。ボタンが無い非Pi環境（`gpiozero` 不在）では自動的に無効化され、`RECORD_SECONDS` の固定秒数録音にフォールバックする。`PTT_MIN_RECORD_SECONDS` / `PTT_MAX_RECORD_SECONDS` で最小・最大録音時間を制御する
 - **テスト実行時**: 外部API（SearXNG/Ollama）にリクエストを飛ばさず、`pytest-mock` でモック化すること
+あいうえお
