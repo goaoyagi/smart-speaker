@@ -17,6 +17,9 @@ jobs:
     # 対策②：ジョブ全体のタイムアウト設定（10分を超えたら自動で強制終了）
     timeout-minutes: 10
 
+    env:
+      TASK_PROMPT: ''
+
     permissions:
       contents: write
       pull-requests: write
