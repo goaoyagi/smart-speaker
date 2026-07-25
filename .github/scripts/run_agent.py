@@ -94,7 +94,7 @@ def main():
 
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash",  # または gemini-3.6-flash
+            model="gemini-3.6-flash",  # または gemini-3.6-flash
             contents=(
                 "あなたはGitHub Actions内で動く自律型コードエージェントです。\n"
                 "【重要な行動手順】\n"
