@@ -1,0 +1,90 @@
+name: Antigravity Async Agent
+
+on:
+  issues:
+    types: [labeled]
+  issue_comment:
+    types: [created]
+
+jobs:
+  antigravity-agent:
+    # 'antigravity' ラベルが付いたか、コメントが '/antigravity' で始まる場合のみ発動
+    if: >
+      (github.event.label.name == 'antigravity') ||
+      (github.event.comment && startsWith(github.event.comment.body, '/antigravity'))
+    runs-on: ubuntu-latest
+    
+    # 対策②：ジョブ全体のタイムアウト設定（10分を超えたら自動で強制終了）
+    timeout-minutes: 10
+
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install google-genai
+
+      # 【改修】Issueタイトル・本文・コメントを全結合して安全に抽出
+      - name: Extract Combined Prompt
+        id: extract
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          {
+            echo "TASK_PROMPT<<EOF"
+            echo "【対象Issueタイトル】: $ISSUE_TITLE"
+            echo "【対象Issue本文】:"
+            echo "$ISSUE_BODY"
+            
+            # コメント起因で実行された場合は、追加指示としてコメント本文も結合
+            if [ "$EVENT_NAME" = "issue_comment" ]; then
+              CLEAN_COMMENT=$(echo "$COMMENT_BODY" | sed 's/^\/antigravity//g')
+              echo ""
+              echo "【追加の指示（コメント）】:"
+              echo "$CLEAN_COMMENT"
+            fi
+            echo "EOF"
+          } >> $GITHUB_ENV
+
+      # クラウド上でAntigravity Agentを実行してコードを変更
+      - name: Run Antigravity Agent
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TASK_PROMPT: ${{ env.TASK_PROMPT }}
+        run: |
+          python .github/scripts/run_agent.py
+
+      # エージェントが変更したファイルを検出してPRを自動作成
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "feat: automated changes by Antigravity agent"
+          title: "🤖 Antigravity PR: ${{ github.event.issue.title }}"
+          body: |
+            ## 🤖 Antigravity Agent 自動生成PR
+
+            PCが閉じられている間に、GitHub Actions上でAntigravityエージェントがタスクを完了しました。
+
+            **【実行された指示・コンテキスト】**
+            ${{ env.TASK_PROMPT }}
+
+            **【関連Issue】**
+            #${{ github.event.issue.number }}
+          branch: "antigravity/issue-${{ github.event.issue.number || github.run_id }}"
+          delete-branch: true
