@@ -17,6 +17,12 @@ def test_default_config_values():
     assert config.RECORD_SECONDS == 10
     assert config.WHISPER_MODEL_SIZE == "small"
     assert config.SEARXNG_URL == "http://localhost:8080"
+    assert config.RERANKER_ENABLED is True
+    assert config.RERANKER_MODEL_ID == (
+        "hotchpotch/japanese-reranker-cross-encoder-xsmall-v1"
+    )
+    assert config.RERANKER_LOCAL_PATH == "./models/reranker"
+    assert config.RERANK_TOP_K == 3
     assert config.OLLAMA_API_URL == "http://localhost:11434/api/generate"
     assert config.OLLAMA_MODEL == "qwen2.5:3b"
     assert config.SPEAKER_DEVICE == "plughw:0,0"
@@ -41,6 +47,9 @@ def test_config_reads_environment(monkeypatch):
     monkeypatch.setenv("PUSH_TO_TALK_ENABLED", "false")
     monkeypatch.setenv("PTT_BUTTON_PIN", "27")
     monkeypatch.setenv("PTT_MAX_RECORD_SECONDS", "45")
+    monkeypatch.setenv("RERANKER_ENABLED", "false")
+    monkeypatch.setenv("RERANK_TOP_K", "5")
+    monkeypatch.setenv("RERANKER_LOCAL_PATH", "./models/custom-reranker")
 
     import src.config
     importlib.reload(src.config)
@@ -52,6 +61,9 @@ def test_config_reads_environment(monkeypatch):
     assert src.config.PUSH_TO_TALK_ENABLED is False
     assert src.config.PTT_BUTTON_PIN == 27
     assert src.config.PTT_MAX_RECORD_SECONDS == 45
+    assert src.config.RERANKER_ENABLED is False
+    assert src.config.RERANK_TOP_K == 5
+    assert src.config.RERANKER_LOCAL_PATH == "./models/custom-reranker"
 
     # Reset
     monkeypatch.delenv("SEARXNG_URL")
@@ -61,6 +73,9 @@ def test_config_reads_environment(monkeypatch):
     monkeypatch.delenv("PUSH_TO_TALK_ENABLED")
     monkeypatch.delenv("PTT_BUTTON_PIN")
     monkeypatch.delenv("PTT_MAX_RECORD_SECONDS")
+    monkeypatch.delenv("RERANKER_ENABLED")
+    monkeypatch.delenv("RERANK_TOP_K")
+    monkeypatch.delenv("RERANKER_LOCAL_PATH")
     importlib.reload(src.config)
 
 

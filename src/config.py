@@ -44,6 +44,15 @@ DEBUG_AUDIO_DIR = os.getenv("DEBUG_AUDIO_DIR", "")
 # Retriever (SearXNG) settings
 SEARXNG_URL = os.getenv("SEARXNG_URL", "http://localhost:8080")
 
+# Reranker (Optimum/ONNX) settings — enabled by default as part of the standard RAG flow
+RERANKER_ENABLED = os.getenv("RERANKER_ENABLED", "true").lower() in ("1", "true", "yes")
+RERANKER_MODEL_ID = os.getenv(
+    "RERANKER_MODEL_ID",
+    "hotchpotch/japanese-reranker-cross-encoder-xsmall-v1",
+)
+RERANKER_LOCAL_PATH = os.getenv("RERANKER_LOCAL_PATH", "./models/reranker")
+RERANK_TOP_K = int(os.getenv("RERANK_TOP_K", "3"))
+
 # Brain (Ollama) settings
 OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434/api/generate")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
