@@ -32,8 +32,6 @@ class _Reranker:
     def rerank(self, query, results):
         if self._unavailable or not RERANKER_ENABLED or len(results) <= 1:
             return results
-        if RERANK_TOP_K <= 0 or RERANK_TOP_K >= len(results):
-            return results
 
         try:
             self._load()
@@ -48,7 +46,8 @@ class _Reranker:
             outputs = self._model(**inputs)
             scores = self._scores(outputs.logits)
             ranked = sorted(zip(scores, results), key=lambda item: item[0], reverse=True)
-            return [result for _, result in ranked[:RERANK_TOP_K]]
+            limit = RERANK_TOP_K if RERANK_TOP_K > 0 else len(ranked)
+            return [result for _, result in ranked[:limit]]
         except Exception:
             self._unavailable = True
             logger.warning("Reranking failed; using unranked search results", exc_info=True)
@@ -69,7 +68,6 @@ class _Reranker:
             self._model = ORTModelForSequenceClassification.from_pretrained(model_path)
         except Exception:
             self._unavailable = True
-            logger.warning("Reranker could not be loaded; using unranked search results", exc_info=True)
             raise
 
     @staticmethod
