@@ -5,7 +5,7 @@
 ## アーキテクチャ
 
 1. **[耳] listener.py**: Whisper.cpp でユーザーの音声をテキスト化
-2. **[検索] retriever.py**: 質問をトリガーに、ローカルの「SearXNG」でWeb検索を実行
+2. **[検索] retriever.py**: 質問をトリガーに、ローカルの「SearXNG」でWeb検索を実行。任意で Optimum ONNX 日本語リランカーにより結果を再順位付け
 3. **[構成] composer.py**: 検索結果（事実ソース）と質問をプロンプトに編成
 4. **[脳] brain.py**: プロンプトを Ollama（Qwen2.5:3b）に投入し、事実に基づく回答を生成
 5. **[口] speaker.py**: `piper-tts-plus` で音声合成して発話
@@ -22,6 +22,12 @@ sudo apt install python3-pytest python3-pytest-mock python3-numpy python3-reques
 ### 本番ロジック用
 ```bash
 pip install faster-whisper piper-tts-plus requests
+```
+
+### 任意: 日本語リランカー（Optimum ONNX）用
+リランクを有効にする場合のみ追加インストールする（未導入でも検索・回答生成は動作する）:
+```bash
+pip install "optimum[onnxruntime]" transformers fugashi unidic-lite
 ```
 
 または既存の仮想環境を使用:
@@ -54,6 +60,18 @@ python3 -m src.main
    mkdir -p models
    # モデルファイルを models/ に配置
    ```
+
+4. **（任意）リランカーモデルのオフライン配置**
+   インターネット制限のあるデプロイ先では、あらかじめネット接続可能なマシンで ONNX をエクスポートし、`models/reranker/` にコピーする:
+   ```bash
+   pip install "optimum[onnxruntime]" transformers fugashi unidic-lite
+   mkdir -p models/reranker
+   optimum-cli export onnx \
+     --model hotchpotch/japanese-reranker-cross-encoder-xsmall-v1 \
+     --task text-classification \
+     models/reranker
+   ```
+   デプロイ先ではエクスポート済みの `models/reranker/` を参照し、実行時に Hugging Face へダウンロードしない運用とする。
 
 ## 実行
 
@@ -95,11 +113,13 @@ smart-speaker/
 ├── .gitignore              # Git除外設定
 ├── .env.example            # 環境変数テンプレート
 ├── conftest.py             # src/ を sys.path に追加（テスト用）
+├── models/                 # 音声・リランカーモデル（Git管理外）
+│   └── reranker/           # オフライン用 Optimum ONNX リランカーキャッシュ
 ├── src/
 │   ├── __init__.py
 │   ├── main.py             # オーケストレーター
 │   ├── listener.py         # Whisper音声認識
-│   ├── retriever.py        # SearXNG Web検索
+│   ├── retriever.py        # SearXNG Web検索（任意で ONNX リランク）
 │   ├── composer.py         # RAGプロンプト構成
 │   ├── brain.py            # Ollama AI生成
 │   ├── speaker.py          # Piper-Plus TTS
@@ -128,6 +148,7 @@ smart-speaker/
 ## 注意点
 
 - **speaker.py**: 本家Piper（espeak-ng依存）は日本語のアクセント解析が未対応のため、必ず `piper-tts-plus` を使用すること
+- **retriever.py**: リランク用の `optimum` / `transformers` は動的 import とし、未インストールでも検索は継続する。テストではリランクを無効化またはモック化し、実モデルへアクセスしない
 - **status_led.py**: `gpiozero` は Raspberry Pi 上でのみ動作するため、非Pi環境では自動的に無効化される
 - **push_to_talk.py**: GPIOボタンが利用できる環境では「押している間だけ録音」するプッシュ・トゥ・トークで動作する。ボタンが無い非Pi環境（`gpiozero` 不在）では自動的に無効化され、`RECORD_SECONDS` の固定秒数録音にフォールバックする。`PTT_MIN_RECORD_SECONDS` / `PTT_MAX_RECORD_SECONDS` で最小・最大録音時間を制御する
 - **テスト実行時**: 外部API（SearXNG/Ollama）にリクエストを飛ばさず、`pytest-mock` でモック化すること
