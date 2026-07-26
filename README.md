@@ -6,11 +6,12 @@
 
 1. **[耳] listener.py**: Whisper.cpp でユーザーの音声をテキスト化
 2. **[検索] retriever.py**: 質問をトリガーに、ローカルの「SearXNG」でWeb検索を実行
-3. **[構成] composer.py**: 検索結果（事実ソース）と質問をプロンプトに編成
-4. **[脳] brain.py**: プロンプトを Ollama（Qwen2.5:3b）に投入し、事実に基づく回答を生成
-5. **[口] speaker.py**: `piper-tts-plus` で音声合成して発話
-6. **[視覚] status_led.py**: GPIO接続のLEDで、待機・聞き取り・検索・思考・発話・エラーを表示
-7. **[操作] push_to_talk.py**: GPIO接続のボタンを押している間だけ録音するプッシュ・トゥ・トーク
+3. **[並べ替え] retriever.py**: 日本語Reranker（Optimum/ONNX のクロスエンコーダ）で検索結果を質問との関連度順に並べ替え
+4. **[構成] composer.py**: Reranking後の検索結果（事実ソース）と質問をプロンプトに編成
+5. **[脳] brain.py**: プロンプトを Ollama（Qwen2.5:3b）に投入し、事実に基づく回答を生成
+6. **[口] speaker.py**: `piper-tts-plus` で音声合成して発話
+7. **[視覚] status_led.py**: GPIO接続のLEDで、待機・聞き取り・検索・思考・発話・エラーを表示
+8. **[操作] push_to_talk.py**: GPIO接続のボタンを押している間だけ録音するプッシュ・トゥ・トーク
 
 ## 必要依存ライブラリ
 
@@ -21,15 +22,8 @@ sudo apt install python3-pytest python3-pytest-mock python3-numpy python3-reques
 
 ### 本番ロジック用
 ```bash
-pip install faster-whisper piper-tts-plus requests
+pip install faster-whisper piper-tts-plus requests optimum[onnxruntime] transformers fugashi unidic-lite
 ```
-
-### Reranking用（オプション）
-```bash
-pip install optimum[onnxruntime] transformers fugashi unidic-lite
-```
-
-Rerankingはオプション機能のため、上記の依存ライブラリをインストールしていなくても動作します。未インストールの場合はRerankingをスキップします。
 
 または既存の仮想環境を使用:
 ```bash
@@ -62,9 +56,10 @@ python3 -m src.main
    # モデルファイルを models/ に配置
    ```
 
-4. **Rerankingモデルの準備（オフライン環境の場合）**
+4. **Rerankingモデルの配置**
 
-   インターネット接続のある別マシンで、`optimum-cli` をインストールしてONNXモデルをエクスポートします。
+   Rerankingモデルを `models/reranker/` に配置します。
+   インターネット非接続環境では、インターネット接続のある別マシンで `optimum-cli` をインストールし、ONNXモデルをエクスポートします。
    ```bash
    pip install optimum[onnxruntime] transformers fugashi unidic-lite
    optimum-cli export onnx \
@@ -151,7 +146,7 @@ smart-speaker/
 ## 注意点
 
 - **speaker.py**: 本家Piper（espeak-ng依存）は日本語のアクセント解析が未対応のため、必ず `piper-tts-plus` を使用すること
-- **retriever.py（Reranking）**: 既定では無効。依存ライブラリ未導入時や処理に失敗した場合は自動的にスキップされる
+- **retriever.py（Reranking）**: 標準構成として既定で有効。依存ライブラリ未導入時や処理に失敗した場合は自動的にスキップされ、検索結果をそのまま使用する
 - **status_led.py**: `gpiozero` は Raspberry Pi 上でのみ動作するため、非Pi環境では自動的に無効化される
 - **push_to_talk.py**: GPIOボタンが利用できる環境では「押している間だけ録音」するプッシュ・トゥ・トークで動作する。ボタンが無い非Pi環境（`gpiozero` 不在）では自動的に無効化され、`RECORD_SECONDS` の固定秒数録音にフォールバックする。`PTT_MIN_RECORD_SECONDS` / `PTT_MAX_RECORD_SECONDS` で最小・最大録音時間を制御する
 - **テスト実行時**: 外部API（SearXNG/Ollama）にリクエストを飛ばさず、`pytest-mock` でモック化すること
