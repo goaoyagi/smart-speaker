@@ -43,6 +43,8 @@ DEBUG_AUDIO_DIR = os.getenv("DEBUG_AUDIO_DIR", "")
 
 # Retriever (SearXNG) settings
 SEARXNG_URL = os.getenv("SEARXNG_URL", "http://localhost:8080")
+# How many SearXNG hits to fetch before reranking (then truncated to RERANK_TOP_K).
+SEARCH_CANDIDATE_LIMIT = int(os.getenv("SEARCH_CANDIDATE_LIMIT", "10"))
 
 # Reranker (Optimum/ONNX) settings — enabled by default as part of the standard RAG flow
 RERANKER_ENABLED = os.getenv("RERANKER_ENABLED", "true").lower() in ("1", "true", "yes")

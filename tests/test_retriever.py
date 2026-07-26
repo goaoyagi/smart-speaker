@@ -5,22 +5,29 @@ Tests for retriever module
 
 import pytest
 import requests
-from unittest.mock import Mock, patch, MagicMock
-from src.retriever import Retriever
+from unittest.mock import Mock, patch
+from types import SimpleNamespace
+from src.retriever import Retriever, _Reranker
 from src.exceptions import SearchError
 
 
 @pytest.fixture
-def retriever(monkeypatch):
-    """Create Retriever with reranking disabled (offline unit-test policy)."""
-    monkeypatch.setattr("src.retriever.RERANKER_ENABLED", False)
+def retriever():
+    """Create Retriever instance"""
     return Retriever()
+
+
+def _mock_search_response(results):
+    mock_response = Mock()
+    mock_response.json.return_value = {'results': results}
+    mock_response.raise_for_status = Mock()
+    return mock_response
 
 
 def test_retriever_initialization(retriever):
     """Test that Retriever initializes correctly"""
     assert retriever.searxng_url == "http://localhost:8080"
-    assert retriever.reranker_enabled is False
+    assert isinstance(retriever._reranker, _Reranker)
 
 
 def test_search_web_success(retriever):
@@ -56,104 +63,193 @@ def test_search_web_timeout(retriever):
             retriever.search_web("test query")
 
 
-def test_search_web_reranks_and_keeps_top_k(monkeypatch, mock_search_results):
-    """When enabled, search results are reranked and truncated to RERANK_TOP_K."""
-    monkeypatch.setattr("src.retriever.RERANKER_ENABLED", True)
-    monkeypatch.setattr("src.retriever.RERANK_TOP_K", 1)
+def test_search_web_reranks_and_truncates(retriever, mocker):
+    mocker.patch("src.retriever.RERANK_TOP_K", 2)
+    mocker.patch.object(retriever._reranker, "_load")
+    retriever._reranker._tokenizer = Mock(return_value={"input_ids": Mock()})
+    retriever._reranker._model = Mock(
+        return_value=SimpleNamespace(logits=[[0.1], [0.9], [0.3]])
+    )
 
-    extra = {
-        'title': '無関係',
-        'content': '関係ない内容',
-        'url': 'http://example.com/3',
-    }
-    api_results = mock_search_results + [extra]
+    results = [
+        {'title': 'Low', 'content': 'low', 'url': 'http://low'},
+        {'title': 'High', 'content': 'high', 'url': 'http://high'},
+        {'title': 'Middle', 'content': 'middle', 'url': 'http://middle'},
+    ]
+    with patch('src.http_client.requests.get', return_value=_mock_search_response(results)):
+        ranked = retriever.search_web("test query")
 
-    mock_response = Mock()
-    mock_response.json.return_value = {'results': api_results}
-    mock_response.raise_for_status = Mock()
-
-    r = Retriever()
-    # Inject a ready mock reranker (no real model download).
-    r._reranker_available = True
-    r._reranker_load_attempted = True
-    r._score_pairs = MagicMock(return_value=[0.1, 0.9, 0.2])
-
-    with patch('src.http_client.requests.get', return_value=mock_response):
-        results = r.search_web("テスト質問")
-
-    assert len(results) == 1
-    assert results[0]['title'] == 'テスト結果2'
-    r._score_pairs.assert_called_once()
+    assert [result['title'] for result in ranked] == ['High', 'Middle']
+    retriever._reranker._tokenizer.assert_called_once()
+    retriever._reranker._model.assert_called_once()
 
 
-def test_rerank_skips_on_import_error(monkeypatch, mock_search_results):
-    """Missing optimum/transformers must not break search (non-fatal)."""
-    monkeypatch.setattr("src.retriever.RERANKER_ENABLED", True)
+def test_search_web_reranks_when_top_k_equals_result_count(retriever, mocker):
+    mocker.patch("src.retriever.RERANK_TOP_K", 3)
+    mocker.patch.object(retriever._reranker, "_load")
+    retriever._reranker._tokenizer = Mock(return_value={"input_ids": Mock()})
+    retriever._reranker._model = Mock(
+        return_value=SimpleNamespace(logits=[[0.1], [0.9], [0.3]])
+    )
 
-    mock_response = Mock()
-    mock_response.json.return_value = {'results': mock_search_results}
-    mock_response.raise_for_status = Mock()
+    results = [
+        {'title': 'Low', 'content': 'low', 'url': 'http://low'},
+        {'title': 'High', 'content': 'high', 'url': 'http://high'},
+        {'title': 'Middle', 'content': 'middle', 'url': 'http://middle'},
+    ]
+    with patch('src.http_client.requests.get', return_value=_mock_search_response(results)):
+        ranked = retriever.search_web("test query")
 
-    r = Retriever()
-    r._reranker_load_attempted = False
-    r._reranker_available = False
-
-    # sys.modules[name] = None makes ``import name`` raise ImportError.
-    with patch.dict(
-        'sys.modules',
-        {'transformers': None, 'optimum': None, 'optimum.onnxruntime': None},
-    ):
-        with patch('src.http_client.requests.get', return_value=mock_response):
-            results = r.search_web("テスト質問")
-
-    assert len(results) == 2
-    assert results[0]['title'] == 'テスト結果1'
-    assert r._reranker_available is False
+    assert [result['title'] for result in ranked] == ['High', 'Middle', 'Low']
 
 
-def test_rerank_skips_on_inference_failure(monkeypatch, mock_search_results):
-    """Inference failures fall back to the original SearXNG order."""
-    monkeypatch.setattr("src.retriever.RERANKER_ENABLED", True)
+def test_search_web_top_k_zero_ranks_without_truncating(retriever, mocker):
+    mocker.patch("src.retriever.RERANK_TOP_K", 0)
+    mocker.patch.object(retriever._reranker, "_load")
+    retriever._reranker._tokenizer = Mock(return_value={"input_ids": Mock()})
+    retriever._reranker._model = Mock(
+        return_value=SimpleNamespace(logits=[[0.1], [0.9], [0.3]])
+    )
 
-    mock_response = Mock()
-    mock_response.json.return_value = {'results': mock_search_results}
-    mock_response.raise_for_status = Mock()
+    results = [
+        {'title': 'Low', 'content': 'low', 'url': 'http://low'},
+        {'title': 'High', 'content': 'high', 'url': 'http://high'},
+        {'title': 'Middle', 'content': 'middle', 'url': 'http://middle'},
+    ]
+    with patch('src.http_client.requests.get', return_value=_mock_search_response(results)):
+        ranked = retriever.search_web("test query")
 
-    r = Retriever()
-    r._reranker_available = True
-    r._reranker_load_attempted = True
-    r._score_pairs = MagicMock(side_effect=RuntimeError("onnx blew up"))
+    assert [result['title'] for result in ranked] == ['High', 'Middle', 'Low']
 
-    with patch('src.http_client.requests.get', return_value=mock_response):
-        results = r.search_web("テスト質問")
 
-    assert results == mock_search_results
+def test_search_web_reranking_disabled(retriever, mocker):
+    mocker.patch("src.retriever.RERANKER_ENABLED", False)
+    load = mocker.patch.object(retriever._reranker, "_load")
+    results = [
+        {'title': 'First', 'content': 'first', 'url': 'http://first'},
+        {'title': 'Second', 'content': 'second', 'url': 'http://second'},
+        {'title': 'Third', 'content': 'third', 'url': 'http://third'},
+        {'title': 'Fourth', 'content': 'fourth', 'url': 'http://fourth'},
+    ]
+    with patch('src.http_client.requests.get', return_value=_mock_search_response(results)):
+        returned = retriever.search_web("test query")
+
+    assert returned == results
+    load.assert_not_called()
+
+
+def test_search_web_import_error_falls_back_permanently(retriever, mocker):
+    load = mocker.patch.object(
+        retriever._reranker, "_load", side_effect=ImportError("missing optimum")
+    )
+    warning = mocker.patch("src.retriever.logger.warning")
+    results = [
+        {'title': 'First', 'content': 'first', 'url': 'http://first'},
+        {'title': 'Second', 'content': 'second', 'url': 'http://second'},
+        {'title': 'Third', 'content': 'third', 'url': 'http://third'},
+        {'title': 'Fourth', 'content': 'fourth', 'url': 'http://fourth'},
+    ]
+    with patch('src.http_client.requests.get', return_value=_mock_search_response(results)):
+        assert retriever.search_web("test query") == results
+        assert retriever.search_web("test query") == results
+
+    assert load.call_count == 1
+    assert retriever._reranker._unavailable is True
+    warning.assert_called_once()
+
+
+def test_search_web_inference_failure_falls_back_permanently(retriever, mocker):
+    mocker.patch.object(retriever._reranker, "_load")
+    retriever._reranker._tokenizer = Mock(return_value={"input_ids": Mock()})
+    retriever._reranker._model = Mock(side_effect=RuntimeError("inference failed"))
+    results = [
+        {'title': 'First', 'content': 'first', 'url': 'http://first'},
+        {'title': 'Second', 'content': 'second', 'url': 'http://second'},
+        {'title': 'Third', 'content': 'third', 'url': 'http://third'},
+        {'title': 'Fourth', 'content': 'fourth', 'url': 'http://fourth'},
+    ]
+    with patch('src.http_client.requests.get', return_value=_mock_search_response(results)):
+        assert retriever.search_web("test query") == results
+        # Second call must not retry inference after the permanent latch.
+        assert retriever.search_web("test query") == results
+
+    assert retriever._reranker._unavailable is True
+    assert retriever._reranker._model.call_count == 1
+
+
+def test_search_web_empty_results_skips_reranking(retriever, mocker):
+    load = mocker.patch.object(retriever._reranker, "_load")
+    with patch('src.http_client.requests.get', return_value=_mock_search_response([])):
+        assert retriever.search_web("test query") == []
+
+    load.assert_not_called()
+
+
+def test_search_web_respects_candidate_limit(retriever, mocker):
+    mocker.patch("src.retriever.RERANKER_ENABLED", False)
+    mocker.patch("src.retriever.SEARCH_CANDIDATE_LIMIT", 2)
+    results = [
+        {'title': 'A', 'content': 'a', 'url': 'http://a'},
+        {'title': 'B', 'content': 'b', 'url': 'http://b'},
+        {'title': 'C', 'content': 'c', 'url': 'http://c'},
+    ]
+    with patch('src.http_client.requests.get', return_value=_mock_search_response(results)):
+        returned = retriever.search_web("test query")
+
+    assert [r['title'] for r in returned] == ['A', 'B']
 
 
 def test_resolve_model_source_prefers_local(tmp_path, monkeypatch):
-    """Local ONNX export directory is preferred over the Hub model id."""
-    monkeypatch.setattr("src.retriever.RERANKER_ENABLED", False)
     local = tmp_path / "reranker"
     local.mkdir()
     (local / "model.onnx").write_text("dummy")
     monkeypatch.setattr("src.retriever.RERANKER_LOCAL_PATH", str(local))
 
-    r = Retriever()
-    source, from_local = r._resolve_model_source()
+    source, from_local = _Reranker._resolve_model_source()
     assert from_local is True
     assert source == str(local)
 
 
 def test_resolve_model_source_falls_back_to_model_id(tmp_path, monkeypatch):
-    """Missing local cache falls back to RERANKER_MODEL_ID."""
-    monkeypatch.setattr("src.retriever.RERANKER_ENABLED", False)
     monkeypatch.setattr("src.retriever.RERANKER_LOCAL_PATH", str(tmp_path / "missing"))
     monkeypatch.setattr(
         "src.retriever.RERANKER_MODEL_ID",
         "hotchpotch/japanese-reranker-cross-encoder-xsmall-v1",
     )
 
-    r = Retriever()
-    source, from_local = r._resolve_model_source()
+    source, from_local = _Reranker._resolve_model_source()
     assert from_local is False
     assert source == "hotchpotch/japanese-reranker-cross-encoder-xsmall-v1"
+
+
+@pytest.mark.parametrize(
+    "logits, expected",
+    [
+        ([[0.1], [0.9], [0.3]], [0.1, 0.9, 0.3]),
+        ([[0.2, 0.8], [0.7, 0.1]], [0.8, 0.1]),
+        ([0.5, 0.1, 0.9], [0.5, 0.1, 0.9]),
+    ],
+)
+def test_scores_absorbs_logit_shapes(logits, expected):
+    assert _Reranker._scores(logits) == expected
+
+
+def test_scores_absorbs_torch_like_tensor():
+    class _FakeTensor:
+        def __init__(self, data):
+            self._data = data
+
+        def detach(self):
+            return self
+
+        def cpu(self):
+            return self
+
+        def numpy(self):
+            return self
+
+        def tolist(self):
+            return self._data
+
+    logits = _FakeTensor([[0.1], [0.9]])
+    assert _Reranker._scores(logits) == [0.1, 0.9]

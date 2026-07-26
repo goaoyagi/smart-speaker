@@ -17,6 +17,7 @@ def test_default_config_values():
     assert config.RECORD_SECONDS == 10
     assert config.WHISPER_MODEL_SIZE == "small"
     assert config.SEARXNG_URL == "http://localhost:8080"
+    assert config.SEARCH_CANDIDATE_LIMIT == 10
     assert config.RERANKER_ENABLED is True
     assert config.RERANKER_MODEL_ID == (
         "hotchpotch/japanese-reranker-cross-encoder-xsmall-v1"
@@ -50,6 +51,7 @@ def test_config_reads_environment(monkeypatch):
     monkeypatch.setenv("RERANKER_ENABLED", "false")
     monkeypatch.setenv("RERANK_TOP_K", "5")
     monkeypatch.setenv("RERANKER_LOCAL_PATH", "./models/custom-reranker")
+    monkeypatch.setenv("SEARCH_CANDIDATE_LIMIT", "7")
 
     import src.config
     importlib.reload(src.config)
@@ -64,6 +66,7 @@ def test_config_reads_environment(monkeypatch):
     assert src.config.RERANKER_ENABLED is False
     assert src.config.RERANK_TOP_K == 5
     assert src.config.RERANKER_LOCAL_PATH == "./models/custom-reranker"
+    assert src.config.SEARCH_CANDIDATE_LIMIT == 7
 
     # Reset
     monkeypatch.delenv("SEARXNG_URL")
@@ -76,6 +79,7 @@ def test_config_reads_environment(monkeypatch):
     monkeypatch.delenv("RERANKER_ENABLED")
     monkeypatch.delenv("RERANK_TOP_K")
     monkeypatch.delenv("RERANKER_LOCAL_PATH")
+    monkeypatch.delenv("SEARCH_CANDIDATE_LIMIT")
     importlib.reload(src.config)
 
 
