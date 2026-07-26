@@ -10,6 +10,7 @@ def read_file(filepath: str) -> str:
     """指定されたパスのファイル内容を読み込んでテキストとして返します。
     コードの修正前に既存の中身を確認するために必ず呼び出してください。
     """
+    time.sleep(12)  # ← ★ここに挿入！(無料枠 5回/分 = 12秒に1回ペースにする)
     try:
         if not os.path.exists(filepath):
             return f"Error: File {filepath} does not exist."
@@ -25,6 +26,7 @@ def read_file(filepath: str) -> str:
 # -------------------------------------------------------------------
 def save_file(filepath: str, content: str) -> str:
     """指定されたパスにファイルの内容を書き込み・保存します。"""
+    time.sleep(12)  # ← ★ここに挿入！(無料枠 5回/分 = 12秒に1回ペースにする)
     try:
         dirname = os.path.dirname(filepath)
         if dirname:
@@ -45,6 +47,7 @@ def list_files(directory: str = ".") -> str:
     """指定したディレクトリ内のファイルやフォルダの一覧を取得します。
     リポジトリの構造を把握したい時に利用してください。
     """
+    time.sleep(12)  # ← ★ここに挿入！(無料枠 5回/分 = 12秒に1回ペースにする)
     try:
         file_list = []
         for root, dirs, files in os.walk(directory):
