@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AGENTS.md 制約の書き換え案</title>
+<style>
+  :root {
+    --accent: #2563eb;
+    --accent-light: #eff6ff;
+    --text: #1f2937;
+    --text-muted: #6b7280;
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --border: #e5e7eb;
+    --code-bg: #0f172a;
+    --code-text: #e2e8f0;
+    --current-border: #9ca3af;
+    --current-bg: #f9fafb;
+    --proposal-border: #059669;
+    --proposal-bg: #ecfdf5;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Yu Gothic", "Noto Sans CJK JP", "Noto Sans JP", Meiryo, sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    line-height: 1.85;
+  }
+  .container { max-width: 920px; margin: 0 auto; padding: 40px 24px 80px; }
+  header.doc-header {
+    background: linear-gradient(135deg, #134e4a 0%, #0d9488 100%);
+    color: #fff;
+    border-radius: 16px;
+    padding: 36px 40px;
+    margin-bottom: 32px;
+  }
+  header.doc-header h1 { margin: 0 0 12px; font-size: 1.7rem; line-height: 1.4; }
+  header.doc-header .meta { font-size: 0.85rem; opacity: 0.85; }
+  nav.toc {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 28px;
+    margin-bottom: 40px;
+    font-size: 0.92rem;
+  }
+  nav.toc strong { display: block; margin-bottom: 8px; color: var(--text-muted); letter-spacing: 0.05em; }
+  nav.toc ol { margin: 0; padding-left: 1.4em; }
+  nav.toc a { color: var(--accent); text-decoration: none; }
+  nav.toc a:hover { text-decoration: underline; }
+  h2 {
+    font-size: 1.35rem;
+    margin: 48px 0 16px;
+    padding-left: 14px;
+    border-left: 5px solid var(--accent);
+  }
+  h3 { font-size: 1.1rem; margin: 32px 0 10px; }
+  p { margin: 12px 0; }
+  ul, ol { padding-left: 1.6em; margin: 10px 0; }
+  li { margin: 6px 0; }
+  code {
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+    background: #eef2f7;
+    color: #be3455;
+    padding: 2px 6px;
+    border-radius: 5px;
+    font-size: 0.88em;
+  }
+  .current {
+    background: var(--current-bg);
+    border-left: 4px solid var(--current-border);
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 14px 0;
+    font-size: 0.92rem;
+  }
+  .current .label,
+  .proposal .label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+  .current p { margin: 6px 0; }
+  .proposal {
+    background: var(--proposal-bg);
+    border-left: 4px solid var(--proposal-border);
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 14px 0;
+  }
+  .proposal .label { color: var(--proposal-border); }
+  .proposal pre {
+    background: var(--code-bg);
+    color: var(--code-text);
+    border-radius: 8px;
+    padding: 16px 20px;
+    overflow-x: auto;
+    font-size: 0.85rem;
+    line-height: 1.7;
+    margin: 6px 0 2px;
+  }
+  .proposal pre code { background: none; color: inherit; padding: 0; font-size: inherit; }
+  .note {
+    background: var(--accent-light);
+    border-left: 4px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 16px 0;
+    font-size: 0.92rem;
+  }
+  footer {
+    margin-top: 64px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header class="doc-header">
+  <h1>AGENTS.md 制約の書き換え案</h1>
+  <div class="meta">
+    目的： 回答精度向上の改善案（別紙「現状分析と改善案」）を実装可能にするための開発ルール改訂<br>
+    方針： 根本の設計思想（生成前RAG・日本語のみ・TTS安定性）は維持し、「適用範囲」を書き換える ／ 作成日： 2026年7月29日
+  </div>
+</header>
+
+<nav class="toc">
+  <strong>目次</strong>
+  <ol>
+    <li><a href="#sec1">書き換えた方がいい制約（3件）</a></li>
+    <li><a href="#sec2">任意： 追記を検討したいもの</a></li>
+    <li><a href="#sec3">書き換えない方がいいもの</a></li>
+    <li><a href="#sec4">反映時の注意</a></li>
+  </ol>
+</nav>
+
+<p>改善案を実装する前提で AGENTS.md を精査すると、<strong>現状の書き方だと改善策と衝突する制約が3つ</strong>あります。以下、現行の記述・問題点・改訂案の順に示します。</p>
+
+<h2 id="sec1">1. 書き換えた方がいい制約</h2>
+
+<h3>1-1. 生成前RAGの処理順序 —— 多段化の余地を明示すべき</h3>
+<div class="current">
+  <span class="label">現行の記述</span>
+  <p><strong>生成前RAG</strong> の処理順序を崩さない（検索 → プロンプト構成 → 生成）。生成後検証への設計変更はしない。</p>
+</div>
+<p>問題点が2つあります。</p>
+<ul>
+  <li><strong>Reranking が抜けている</strong>。実態は「検索 → Reranking → プロンプト構成 → 生成」で、<code>project_context.md</code> 側には記載があるのに AGENTS.md 側と不一致</li>
+  <li>クエリ書き換え（改善案B1）や検索要否判定（B2）のような<strong>生成の前段に LLM 呼び出しを挟む改善が、文面上は順序違反に読めてしまう</strong>。将来のエージェント（や人間）が「順序を崩すな」と解釈して着手を躊躇するリスクがある</li>
+</ul>
+<div class="proposal">
+  <span class="label">改訂案</span>
+  <pre><code>- **生成前RAG** の基本順序を崩さない（検索 → Reranking → プロンプト構成 → 生成）。
+  - 生成前の多段化は許可する：クエリ書き換え（検索の前）、検索要否判定（検索の前）、
+    本文フェッチ（検索の後）、エビデンス抽出（Reranking の後）など。
+  - 生成後に LLM を再呼び出しして検証・推敲する設計（生成後検証）は導入しない。</code></pre>
+</div>
+<p>なお「生成後検証を禁止する」思想自体は、小型LLMでは検証器も弱く効果が薄い・遅延が倍増するという点で妥当だと考えます。もし将来「下書き→推敲」まで許容したくなったら、この一文の緩和を別途判断する形がよいです。</p>
+
+<h3>1-2. 日本語のみ制約 —— 「最終回答」への適用限定と、指示の置き場所の非固定化</h3>
+<div class="current">
+  <span class="label">現行の記述</span>
+  <p>回答は<strong>日本語のみ</strong>（アルファベットを含めない）。TTS の安定性のため、<code>composer.py</code> のプロンプトが持つ日本語限定・アルファベット禁止の指示を維持する。</p>
+</div>
+<p>問題点が2つあります。</p>
+<ul>
+  <li><strong>「composer.py のプロンプトが持つ」と場所が固定されている</strong>。改善案の system プロンプト導入（A1）や <code>/api/chat</code> 移行（D1）をすると、指示の置き場所が composer のプロンプト文から system メッセージに移るので、文字通り守ると矛盾する</li>
+  <li><strong>中間的な LLM 呼び出しまで日本語限定にする必要はない</strong>。クエリ書き換えの出力（検索クエリ）は発話されないので、アルファベットの固有名詞を許した方がむしろ SearXNG の検索精度が上がる</li>
+</ul>
+<div class="proposal">
+  <span class="label">改訂案</span>
+  <pre><code>- **最終的に発話する回答**は日本語のみ（アルファベットを含めない）。TTS（piper-tts-plus）の安定性のため。
+  この指示はプロンプトまたはシステムメッセージのいずれかの形で必ず維持する（置き場所は composer.py に限定しない）。
+- クエリ書き換え・検索要否判定など、発話されない中間的な LLM 呼び出しの出力にはこの制約を適用しない
+  （検索クエリにアルファベットの固有名詞を含めることを許可する）。</code></pre>
+</div>
+
+<h3>1-3. エラー方針 —— 補助的な LLM 呼び出しを非致命として明記</h3>
+<div class="current">
+  <span class="label">現行の記述</span>
+  <p><code>main.py</code> のエラー方針に合わせる:</p>
+  <p>・検索失敗（<code>SearchError</code>）は<strong>非致命</strong>。空コンテキストで処理を続行する。</p>
+  <p>・録音・認識（<code>ListenerError</code>）・生成（<code>GenerationError</code>）・発話（<code>SpeakerError</code>）の失敗は<strong>致命</strong>。</p>
+</div>
+<p>問題点： クエリ書き換えや Router の失敗は <code>GenerationError</code> として表面化するので、現行ルールだと<strong>致命扱い＝会話ターン全体が落ちる</strong>。補助処理が落ちても元の質問で続行できるのが本来あるべき姿で、Reranker 失敗時のフェイルソフト設計とも思想的に同じですが、明文化されていません。</p>
+<div class="proposal">
+  <span class="label">改訂案</span>
+  <pre><code>- `main.py` のエラー方針に合わせる:
+  - 検索失敗（`SearchError`）は**非致命**。空コンテキストで処理を続行する。
+  - 補助的な LLM 呼び出し（クエリ書き換え・検索要否判定・エビデンス抽出）の失敗も**非致命**とし、
+    補助処理をスキップして元の入力で処理を続行する（Reranker 失敗時のフォールバックと同じ考え方）。
+  - 最終回答の生成（`GenerationError`）・録音・認識（`ListenerError`）・発話（`SpeakerError`）の失敗は**致命**。</code></pre>
+</div>
+
+<h2 id="sec2">2. 任意： 追記を検討したいもの</h2>
+<p><strong>「新規依存は最小限に」の判断基準の明文化</strong>。本文フェッチ用の <code>trafilatura</code> 導入（改善案C1）はこのルールと緊張関係にあるので、基準を書いておくと判断がぶれません。</p>
+<div class="proposal">
+  <span class="label">追記案</span>
+  <pre><code>- 新規依存は最小限に。追加する場合は Raspberry Pi（ARM64）での動作実績・メモリ使用量・
+  起動時間への影響を確認し、PR に根拠を記載する。</code></pre>
+</div>
+
+<h2 id="sec3">3. 書き換えない方がいいもの</h2>
+<ul>
+  <li><strong>生成前RAGの根本思想</strong>と<strong>日本語回答の根本方針</strong>： ハルシネーション対策とTTS安定性の要なので維持</li>
+  <li><strong>テスト規則・コミット/PR規則</strong>： 新しい LLM 呼び出しにもそのまま適用可能（モック化・ミラーテスト追加・<code>.env.example</code> 更新の各ルールでカバーできる）</li>
+  <li><strong>アルファベット禁止そのもの</strong>： 「TTS前処理で英語→カタカナ変換（fugashi/UniDic活用）に移してプロンプト側の禁止を緩和する」という抜本改革も理論上は可能ですが、変換精度のリスクが大きく、現時点ではプロンプト側での禁止維持が安全です</li>
+</ul>
+
+<h2 id="sec4">4. 反映時の注意</h2>
+<div class="note">
+  AGENTS.md を改訂する際は <code>project_context.md</code> 側の「生成前RAGの処理順序を崩さないこと」等の記述と<strong>文言の整合を取る</strong>ことも忘れないようにしてください（片方だけ更新すると、次のエージェントが矛盾した指示を読むことになります）。変更はルール自身の定めに従い、feature ブランチ＋プルリクエストで統合します。
+</div>
+
+<footer>
+  本ドキュメントは Kimi により生成されました（2026-07-29） ／ AGENTS.md 制約の書き換え案
+</footer>
+
+</div>
+</body>
+</html>
