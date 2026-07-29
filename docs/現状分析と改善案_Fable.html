@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AIスマートスピーカー 現状分析と改善案</title>
+<style>
+  :root {
+    --accent: #2563eb;
+    --accent-light: #eff6ff;
+    --warn: #b45309;
+    --warn-bg: #fffbeb;
+    --ok: #15803d;
+    --ok-bg: #f0fdf4;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --code-bg: #f3f4f6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Noto Sans JP", "Yu Gothic", Meiryo, sans-serif;
+    color: var(--text);
+    line-height: 1.9;
+    margin: 0;
+    background: #f9fafb;
+  }
+  .container {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 4rem;
+    background: #fff;
+    box-shadow: 0 0 24px rgba(0,0,0,.06);
+  }
+  h1 {
+    font-size: 1.7rem;
+    border-bottom: 3px solid var(--accent);
+    padding-bottom: .5rem;
+    margin-top: 0;
+  }
+  h2 {
+    font-size: 1.35rem;
+    margin-top: 2.8rem;
+    padding-left: .6rem;
+    border-left: 6px solid var(--accent);
+  }
+  h3 {
+    font-size: 1.1rem;
+    margin-top: 2rem;
+    color: var(--accent);
+  }
+  .meta { color: var(--muted); font-size: .85rem; margin-bottom: 2rem; }
+  .tldr {
+    background: var(--accent-light);
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    padding: 1rem 1.3rem;
+    margin: 1.5rem 0;
+  }
+  .tldr strong { color: var(--accent); }
+  .cause {
+    background: var(--warn-bg);
+    border: 1px solid #fde68a;
+    border-radius: 8px;
+    padding: .9rem 1.2rem;
+    margin: 1rem 0;
+  }
+  .cause .label { color: var(--warn); font-weight: bold; }
+  .proposal {
+    background: var(--ok-bg);
+    border: 1px solid #bbf7d0;
+    border-radius: 8px;
+    padding: .9rem 1.2rem;
+    margin: 1rem 0;
+  }
+  .proposal .label { color: var(--ok); font-weight: bold; }
+  code {
+    background: var(--code-bg);
+    border-radius: 4px;
+    padding: .1em .35em;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: .88em;
+  }
+  pre {
+    background: #1f2937;
+    color: #f3f4f6;
+    border-radius: 8px;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    line-height: 1.6;
+  }
+  pre code { background: none; color: inherit; padding: 0; font-size: .85rem; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1.2rem 0;
+    font-size: .92rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: .55rem .8rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--accent-light); }
+  ul, ol { padding-left: 1.5rem; }
+  li { margin: .35rem 0; }
+  .note { color: var(--muted); font-size: .88rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>AIスマートスピーカー 現状分析と改善案</h1>
+<p class="meta">対象リポジトリ: smart-speaker（Raspberry Pi 5 / ローカルRAG構成）｜作成: 2026年7月</p>
+
+<div class="tldr">
+<strong>要約（TL;DR）</strong><br>
+現状の最大のボトルネックは LLM そのものではなく、
+<strong>(1) Ollama をデフォルト設定（コンテキスト4096トークン・生成オプション未指定）のまま呼んでいること、
+(2) LLM に渡す「材料」が検索スニペット（1〜2文）だけで薄いこと、
+(3) フォローアップ質問がそのまま検索クエリになり、無関係な検索結果が「絶対的事実」としてプロンプトに注入されること</strong>
+の3点。応答時間に余裕があるなら、「検索前のクエリ書き換え（LLM 1回目）＋上位ページの本文取得と既存Rerankerによるチャンク選別＋回答生成（LLM 2回目）」の構成が最も効果が大きい。
+</div>
+
+<h2>1. 現状のパイプライン</h2>
+<ol>
+  <li><strong>[耳] listener.py</strong>: Whisper でユーザーの音声をテキスト化</li>
+  <li><strong>[検索] retriever.py</strong>: 認識テキストをそのまま SearXNG に投げてWeb検索（最大10件）</li>
+  <li><strong>[並べ替え] retriever.py</strong>: 日本語クロスエンコーダ（Optimum/ONNX）で再ランクし上位3件に絞る</li>
+  <li><strong>[構成] composer.py</strong>: 検索結果のタイトル＋スニペットと会話履歴（直近3ターン・回答200文字クリップ）をプロンプトに編成</li>
+  <li><strong>[脳] brain.py</strong>: Ollama <code>/api/generate</code>（qwen2.5:3b、options未指定）で回答生成</li>
+  <li><strong>[口] speaker.py</strong>: piper-tts-plus で発話</li>
+</ol>
+
+<h2>2. 精度が出ない具体的な原因</h2>
+
+<div class="cause">
+<span class="label">原因1: Ollama の呼び出しがデフォルト設定のまま</span>（回答が短い・文脈が消える の両方に直結）
+</div>
+<p><code>brain.py</code> は <code>/api/generate</code> に <code>options</code> を一切渡していない。</p>
+<pre><code>json_body={
+    'model': self.ollama_model,
+    'prompt': prompt,
+    'stream': False
+}</code></pre>
+<ul>
+  <li><strong>コンテキスト長</strong>: Ollama の現行仕様では、GPU の無い環境（Pi 5 は CPU 推論）の既定 <code>num_ctx</code> は <strong>4096トークン</strong>。一方 <code>brain.py</code> は <code>prompt[:10000]</code> と1万<em>文字</em>まで許容しており、日本語はほぼ1文字≒1トークン以上なので、履歴＋検索結果を含むプロンプトは容易に 4096 を超える。Ollama はバッファが溢れると<strong>古いトークン（＝プロンプト冒頭）から捨てる</strong>ため、「日本語のみ」の指示・会話履歴・検索結果の前半が黙って消える。「会話コンテキスト保持が効かない」症状の有力な直接原因。</li>
+  <li><strong>生成長・温度</strong>: <code>num_predict</code>（最大生成トークン数）や <code>temperature</code>、<code>repeat_penalty</code> が未指定で、小型モデルは指示がなければ短く切り上げがち。「回答が短すぎる」の一因。</li>
+</ul>
+
+<div class="cause">
+<span class="label">原因2: LLM に渡す事実ソースが「検索スニペット」だけで薄い</span>
+</div>
+<p><code>composer.py</code> がコンテキストとして使うのは SearXNG が返す <code>title</code> と <code>content</code>（スニペット）のみ。スニペットは各1〜2文しかないため、Reranker で上位3件に絞っても LLM の手元にある情報量は合計数百文字程度。<strong>材料が薄ければ、どんなにプロンプトを工夫しても回答は短く浅くなる</strong>。Reranker 導入で「どれを渡すか」は改善したが、「渡すものの中身」が改善されていない。</p>
+
+<div class="cause">
+<span class="label">原因3: フォローアップ質問が生のまま検索クエリになる</span>
+</div>
+<p><code>main.py</code> の処理順を見ると、会話履歴はプロンプト構成にしか使われず、検索には使われていない。「それはどういうこと？」のような発話がそのまま SearXNG に投げられ、無関係な検索結果が返る。しかもプロンプトはその結果を<strong>「絶対に事実」として扱え</strong>と指示しているため、無関係な情報が会話履歴より優先され、文脈が壊れる。「会話コンテキストが効かない」のもう一つの主因。</p>
+
+<div class="cause">
+<span class="label">原因4: 履歴の持ち方が単発テキスト生成向け</span>
+</div>
+<ul>
+  <li><code>conversation_history.py</code> は直近3ターン・回答200文字クリップの平文要約で、<code>/api/generate</code> の単発プロンプトに文字列として埋め込んでいる。Qwen2.5 はチャット調整済みモデルなので、<code>/api/chat</code> で system / user / assistant のロール付きメッセージとして履歴を渡す方が、指示追従・文脈参照ともに素直に効く。</li>
+  <li>プロンプト側にも system 指示が分離されておらず、「日本語のみ」ルール・事実指示・履歴・質問が1本の文字列に混在している。</li>
+</ul>
+
+<h2>3. 改善案（優先度順）</h2>
+<p class="note">前提: AGENTS.md の制約（生成前RAGの順序維持・生成後検証への設計変更禁止・日本語限定指示の維持）はすべて守れる範囲での提案。</p>
+
+<div class="proposal">
+<span class="label">案1【最優先・依存追加なし】Ollama 呼び出しの適正化</span>
+</div>
+<ul>
+  <li><code>brain.py</code> で <code>options</code> を明示指定する: <code>num_ctx</code>（Pi 5 の 8GB なら 8192 が現実的。<code>ollama ps</code> の CONTEXT 列で実際の割当を確認）、<code>num_predict</code>（例: 512）、<code>temperature</code>（0.2〜0.3、事実ベース回答向け）、<code>repeat_penalty</code>。値は <code>config.py</code> ＋ <code>.env.example</code> に追加。</li>
+  <li><code>/api/generate</code> → <code>/api/chat</code> へ移行し、system メッセージに「日本語のみ・アルファベット禁止・検索結果を事実として扱う・<strong>3〜6文程度で具体的に答える</strong>」を固定で置く。回答の長さの明示指示は「短すぎる」対策として即効性がある（スマートスピーカーなので長すぎも禁物。目標長の指定が正解）。</li>
+  <li>会話履歴は平文要約ではなく user / assistant のロール付きメッセージとして渡す（<code>ConversationHistory</code> に messages 形式の出力を追加）。</li>
+</ul>
+<p>変更範囲は <code>brain.py</code>・<code>composer.py</code>・<code>conversation_history.py</code>・<code>config.py</code> で、外部依存の追加はゼロ。<strong>費用対効果が最も高い</strong>。</p>
+
+<div class="proposal">
+<span class="label">案2【LLM 2回呼び・依存追加なし】検索前のクエリ書き換え（Condense Question）</span>
+</div>
+<p>履歴が存在する場合、検索の<strong>前に</strong> LLM を1回呼び、「会話履歴＋今回の発話」から自己完結した日本語検索クエリを生成させる（例:「それはどういうこと？」→「◯◯とは何か 意味」）。書き換えたクエリで SearXNG → Reranker を実行する。</p>
+<ul>
+  <li>生成前RAGの順序（検索→構成→生成）は崩れない。検索の前段が1ステップ増えるだけ。</li>
+  <li>3Bモデルでもクエリ書き換え程度なら十分こなせ、追加レイテンシは数秒程度。書き換え失敗時は元の発話で検索するフォールバックにすれば非致命の方針にも合う。</li>
+  <li>フォローアップ質問時の「無関係な検索結果が事実として注入される」問題を根本的に解消する。</li>
+</ul>
+
+<div class="proposal">
+<span class="label">案3【新ライブラリ導入】上位ページの本文取得＋チャンク単位の再ランク</span>
+</div>
+<p>Reranker で選んだ上位1〜3件の URL について本文を取得し、スニペットの代わりに本文チャンクをコンテキストにする。</p>
+<ul>
+  <li>本文抽出には <code>trafilatura</code>（純Python寄りで Pi でも軽量、日本語ページの本文抽出精度が高い）を推奨。代替は <code>readability-lxml</code>。</li>
+  <li>本文を500〜800文字程度のチャンクに分割し、<strong>既存の ONNX クロスエンコーダをそのまま流用</strong>して「質問 vs チャンク」で再ランクし、上位数チャンクだけをプロンプトへ。導入済みの Reranker 資産が2度活きる。</li>
+  <li>取得失敗はスニペットへのフォールバックとし、<code>SearchError</code> 系の非致命方針を維持。</li>
+  <li>HTTP 取得は <code>http_client.py</code> 経由に拡張（現在 JSON 専用のため HTML 取得関数の追加が必要）。</li>
+</ul>
+<p>「回答が短い・浅い」への最も本質的な対策。追加レイテンシはページ取得＋再ランクで数秒〜10秒程度。</p>
+
+<div class="proposal">
+<span class="label">案4【LLM 複数回呼び・発展形】チャンクごとの事実抽出（Map-Reduce）</span>
+</div>
+<p>案3をさらに進め、取得した各ページ（またはチャンク群）に対し「この質問に関係する事実だけを日本語で箇条書きに抽出せよ」という LLM 呼び出しを行い（Map）、抽出済みの事実リストを最終プロンプトに渡して回答生成（Reduce）する。</p>
+<ul>
+  <li>小型モデルは「長い雑多なコンテキストから取捨選択して回答する」のが苦手で、「短い作業を確実にこなす」のは得意。3Bモデルとの相性が良い構成。</li>
+  <li>すべて生成「前」の処理のため、生成後検証禁止の制約にも抵触しない。</li>
+  <li>レイテンシはページ数×1回の推論（Pi 5 の 3B で各10〜20秒程度）増えるため、案1〜3の効果を見てから判断するのがよい。</li>
+</ul>
+
+<div class="proposal">
+<span class="label">案5【設定変更のみ】モデルの見直し</span>
+</div>
+<p>一言でいうと、<strong>「頭脳として使うAIモデル自体を、より新しく賢いものに交換する」</strong>提案。現在は <code>.env</code> の <code>OLLAMA_MODEL=qwen2.5:3b</code> で「Qwen2.5 の 3B（30億パラメータ）」を使用している。パラメータ数はざっくり「脳の大きさ」で、大きいほど賢いが、必要なメモリと時間も増える。</p>
+<h3>なぜ交換で精度が上がるのか</h3>
+<ol>
+  <li><strong>世代が新しいモデルは同じサイズでも賢い。</strong> Qwen2.5 は2024年のモデルで、その後により新しい世代（例: Qwen3 系）が出ている。同じ 3〜4B クラスでも、新世代のほうが日本語力・指示の守り方・回答の充実度が向上している（車と同じで「排気量が同じでも新型のほうが性能がいい」イメージ）。</li>
+  <li><strong>少し大きいサイズも選択肢に入る。</strong> 応答が遅くなってもよい前提なら、3B より大きいモデルも候補になる。</li>
+</ol>
+<h3>なぜ「7Bではなく4Bクラス」を勧めるのか</h3>
+<p>ラズパイ5のメモリ（8GB想定）は、<strong>「モデル本体」と「会話の作業スペース（コンテキスト）」の2つで取り合い</strong>になる。</p>
+<ul>
+  <li><strong>7Bモデル</strong>を入れると、モデル本体だけでメモリの大半（約4.5GB＋OS等）を食ってしまい、案1で広げたい作業スペース（<code>num_ctx</code>）を確保する余裕がなくなる。せっかく検索結果の本文や会話履歴をたくさん渡せるようにしても、置き場所がない状態になる。</li>
+  <li><strong>4Bクラスの新世代モデル</strong>なら、本体は約2.5〜3GBで済むので、作業スペースを広め（8192トークン）に取れる。「そこそこ賢い頭脳＋広い机」の組み合わせのほうが、「賢い頭脳＋狭すぎる机」より総合的に良い結果になる。</li>
+</ul>
+<h3>やることは設定変更だけ</h3>
+<pre><code>ollama pull qwen3:4b        # 新しいモデルをダウンロード</code></pre>
+<p><code>.env</code> の <code>OLLAMA_MODEL=qwen2.5:3b</code> を <code>OLLAMA_MODEL=qwen3:4b</code> に変えれば切り替わる。元に戻すのも1行なので、<strong>試して悪ければすぐ戻せる、リスクの低い改善策</strong>。</p>
+<h3>注意点</h3>
+<ul>
+  <li>3B→4Bになるぶん、回答生成は1.2〜1.5倍ほど遅くなる見込み。</li>
+  <li>「どちらのモデルが本当に良いか」は体感だと判断がぶれるので、案1〜3を先に入れて土台を整えてから、同じ質問を両方のモデルに投げて聞き比べる（A/B比較）のがおすすめ。</li>
+</ul>
+
+<h2>4. 併せて直したい小さな点</h2>
+<ul>
+  <li><code>CONVERSATION_ANSWER_CLIP=200</code> は案1で <code>num_ctx</code> を拡大すれば 400〜600 に引き上げられ、フォローアップの成立率が上がる。</li>
+  <li><code>brain.py</code> の <code>prompt[:10000]</code> は「文字数での切り詰め」であり先頭が残り末尾（＝質問）が消える方向のため、案1実施時に見直しが必要。</li>
+  <li>「音声が検出されませんでした」系の定型発話が <code>last_answer</code> を上書きしない現仕様は維持すべき（変更不要の確認事項）。</li>
+</ul>
+
+<h2>5. 推奨する進め方</h2>
+<table>
+  <tr><th>順序</th><th>内容</th><th>依存追加</th><th>期待効果</th></tr>
+  <tr><td>1</td><td><strong>案1</strong>: Ollama options ＋ <code>/api/chat</code> ＋ system プロンプト ＋ 目標回答長</td><td>なし</td><td>「短すぎる」「文脈が消える」の両方に効く</td></tr>
+  <tr><td>2</td><td><strong>案2</strong>: 検索前のクエリ書き換え（LLM 2回呼びの導入）</td><td>なし</td><td>フォローアップ質問の検索品質を根本改善</td></tr>
+  <tr><td>3</td><td><strong>案3</strong>: trafilatura による本文取得＋チャンク再ランク</td><td>trafilatura</td><td>回答の深さ・具体性を改善</td></tr>
+  <tr><td>4</td><td>効果を見て<strong>案4</strong>（Map-Reduce 事実抽出）や<strong>案5</strong>（モデル差し替え）を判断</td><td>案4: なし／案5: モデルDL</td><td>さらなる精度向上</td></tr>
+</table>
+<p>それぞれ独立した PR に分けられる粒度（AGENTS.md の「1 PR 1目的」に適合）。</p>
+
+</div>
+</body>
+</html>
