@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>現状分析と改善案 4案の実装順序比較（Fable / Fusion / Kimi / Ultra）</title>
+<style>
+  :root {
+    --fg: #1f2937;
+    --muted: #6b7280;
+    --border: #d8dee6;
+    --bg: #f6f7f9;
+    --card: #ffffff;
+    --fable: #2563eb;
+    --fusion: #7c3aed;
+    --kimi: #0f9488;
+    --ultra: #d97706;
+    --soft: #f1f5f9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.85;
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN",
+      "Hiragino Sans", "Noto Sans JP", "Yu Gothic", Meiryo, sans-serif;
+    font-size: 15.5px;
+  }
+  .container { max-width: 1180px; margin: 0 auto; padding: 32px 20px 96px; }
+  header.doc-header {
+    background: linear-gradient(135deg, #1e3a8a 0%, #4338ca 55%, #7c3aed 100%);
+    color: #fff;
+    border-radius: 16px;
+    padding: 32px 36px;
+    margin-bottom: 24px;
+  }
+  header.doc-header h1 { margin: 0 0 10px; font-size: 1.6rem; line-height: 1.45; }
+  header.doc-header p { margin: 6px 0 0; font-size: .88rem; opacity: .9; }
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 28px;
+  }
+  button.dl {
+    font: inherit;
+    font-weight: 700;
+    color: #fff;
+    background: #1d4ed8;
+    border: none;
+    border-radius: 9px;
+    padding: 10px 22px;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(29,78,216,.28);
+  }
+  button.dl:hover { background: #1e40af; }
+  button.dl:active { transform: translateY(1px); }
+  .toolbar .hint { color: var(--muted); font-size: .84rem; }
+  h2 {
+    font-size: 1.25rem;
+    margin: 44px 0 14px;
+    padding-left: 13px;
+    border-left: 5px solid #4338ca;
+  }
+  h3 { font-size: 1.03rem; margin: 28px 0 8px; }
+  p { margin: 10px 0; }
+  ul, ol { padding-left: 1.5em; margin: 10px 0; }
+  li { margin: 5px 0; }
+  code {
+    font-family: "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+    background: #eef2f7;
+    color: #9d174d;
+    border-radius: 5px;
+    padding: 1px 5px;
+    font-size: .86em;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 22px;
+    margin: 16px 0;
+  }
+  .legend { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0 8px; }
+  .chip {
+    display: inline-block;
+    border-radius: 999px;
+    padding: 3px 14px;
+    font-size: .82rem;
+    font-weight: 700;
+    color: #fff;
+  }
+  .chip.fable { background: var(--fable); }
+  .chip.fusion { background: var(--fusion); }
+  .chip.kimi { background: var(--kimi); }
+  .chip.ultra { background: var(--ultra); }
+  .table-wrap { overflow-x: auto; margin: 16px 0 8px; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    background: var(--card);
+    font-size: .88rem;
+    min-width: 900px;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 9px 11px;
+    text-align: left;
+    vertical-align: top;
+  }
+  thead th { background: var(--soft); font-weight: 700; position: sticky; top: 0; }
+  th.col-fable { border-top: 4px solid var(--fable); }
+  th.col-fusion { border-top: 4px solid var(--fusion); }
+  th.col-kimi { border-top: 4px solid var(--kimi); }
+  th.col-ultra { border-top: 4px solid var(--ultra); }
+  td.order {
+    text-align: center;
+    font-weight: 700;
+    font-size: 1.05rem;
+    background: var(--soft);
+    white-space: nowrap;
+  }
+  td.axis { font-weight: 600; background: #fbfcfd; }
+  tbody tr:nth-child(even) td:not(.order):not(.axis) { background: #fbfcfd; }
+  .tag {
+    display: inline-block;
+    font-size: .72rem;
+    font-weight: 700;
+    border-radius: 5px;
+    padding: 1px 7px;
+    margin-right: 5px;
+    vertical-align: 1px;
+    color: #fff;
+    white-space: nowrap;
+  }
+  .tag.f { background: var(--fable); }
+  .tag.u { background: var(--fusion); }
+  .tag.k { background: var(--kimi); }
+  .tag.t { background: var(--ultra); }
+  .none { color: #9ca3af; }
+  .same { color: #047857; font-weight: 700; }
+  .diff { color: #b91c1c; font-weight: 700; }
+  .note {
+    background: #eff6ff;
+    border-left: 4px solid #2563eb;
+    border-radius: 0 8px 8px 0;
+    padding: 12px 16px;
+    margin: 16px 0;
+    font-size: .9rem;
+  }
+  .warn {
+    background: #fffbeb;
+    border-left: 4px solid #f59e0b;
+    border-radius: 0 8px 8px 0;
+    padding: 12px 16px;
+    margin: 16px 0;
+    font-size: .9rem;
+  }
+  .caption { color: var(--muted); font-size: .82rem; margin: 4px 0 22px; }
+  footer {
+    margin-top: 56px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: .8rem;
+    text-align: center;
+  }
+  @media print {
+    body { background: #fff; font-size: 11px; }
+    .toolbar { display: none; }
+    table { min-width: 0; font-size: 10px; }
+    h2 { page-break-after: avoid; }
+    table, .card { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header class="doc-header">
+  <h1>現状分析と改善案 4案の実装順序比較</h1>
+  <p>比較対象： 現状分析と改善案_Fable.html ／ 現状分析と改善案_Fusion.html ／ 現状分析と改善案_Kimi.html ／ 現状分析と改善案_Ultra.html</p>
+  <p>対象リポジトリ： goaoyagi/smart-speaker（Raspberry Pi 5 ／ SearXNG ＋ ONNX Reranker ＋ Ollama qwen2.5:3b ＋ piper-tts-plus）</p>
+  <p>作成： 2026年7月30日</p>
+</header>
+
+<div class="toolbar">
+  <button class="dl" type="button" onclick="downloadThisPage()">このページをHTMLでダウンロード</button>
+  <span class="hint">ボタンを押すと、この比較ページをそのまま単一のHTMLファイルとして保存できます（印刷からPDF化も可）。</span>
+</div>
+
+<div class="card">
+  <strong>この資料の読み方</strong>
+  <p>各案が文書末尾に示している「推奨実施順」をそのまま抜き出し、<strong>順序（1番目、2番目…）を行</strong>、<strong>4案を列</strong>にして並べています。表1で「同じ順番に何を置いているか」を、表2で「同じ施策を各案が何番目に置いているか」を逆側から確認できます。表3以降で数値・前提・固有提案の食い違いを整理しています。</p>
+  <div class="legend">
+    <span class="chip fable">Fable</span>
+    <span class="chip fusion">Fusion</span>
+    <span class="chip kimi">Kimi</span>
+    <span class="chip ultra">Ultra</span>
+  </div>
+</div>
+
+<h2>表1. 実装順序マトリクス（行＝実施順、列＝各案）</h2>
+<p class="caption">各案の最終章「推奨する進め方／推奨実施順／推奨ロードマップ」に記載された順序をそのまま転記。ステップ数は Fable 4／Fusion 8／Kimi 7／Ultra 5。</p>
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th style="width:52px">順序</th>
+      <th class="col-fable" style="width:24%">Fable（4ステップ）</th>
+      <th class="col-fusion" style="width:24%">Fusion（8ステップ）</th>
+      <th class="col-kimi" style="width:24%">Kimi（7ステップ）</th>
+      <th class="col-ultra" style="width:24%">Ultra（5フェーズ）</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="order">1</td>
+      <td><span class="tag f">案1</span><strong>Ollama 呼び出しの適正化</strong><br><code>options</code> 明示（<code>num_ctx</code>/<code>num_predict</code>/<code>temperature</code>/<code>repeat_penalty</code>）＋ <code>/api/chat</code> 移行 ＋ system プロンプト ＋ 目標回答長 ＋ 履歴を role 付き messages 化。依存追加なし。</td>
+      <td><span class="tag u">Phase 0</span><strong>設定と呼び出し方式の修正</strong><br><code>options</code> 送信 ＋ <code>/api/chat</code> 移行 ＋ プロンプト再設計（番号付き出典・質問を最後に）＋ <strong>トークン予算管理</strong> ＋ 履歴拡張 ＋ <strong>話題リセット</strong>。依存追加なし。</td>
+      <td><span class="tag k">A1</span><strong><code>brain.py</code> に options / system / keep_alive を追加</strong><br><code>/api/generate</code> のまま <code>system</code> を渡して既定の英語システム文言を上書き。<code>keep_alive: 30m</code> を重視。</td>
+      <td><span class="tag t">Phase 1</span><strong>生成パラメータとプロンプトの整備</strong><br><code>options</code> 追加 ＋ <code>/api/chat</code> 移行 ＋ system に回答スタイル集約 ＋ 履歴を messages 配列化 ＋ clip/turns 拡大。依存追加なし。</td>
+    </tr>
+    <tr>
+      <td class="order">2</td>
+      <td><span class="tag f">案2</span><strong>検索前のクエリ書き換え</strong><br>履歴＋発話から自己完結クエリを生成（Condense Question）。失敗時は元発話で検索にフォールバック。依存追加なし。</td>
+      <td><span class="tag u">Phase 6</span><strong>評価基盤（<code>scripts/eval.py</code>）</strong><br>音声を通さずテキスト入出力だけでパイプラインを回すハーネス。日本語20〜30問の評価セットで before/after を数値比較。<span class="diff">※4案中この案のみ</span></td>
+      <td><span class="tag k">A2</span><strong><code>composer.py</code> のプロンプト強化</strong><br>「3〜5文で具体的に」＋「指示語は会話履歴を参照して解釈」＋<strong>「検索結果が無関係なら無視してよい」</strong>を追加。</td>
+      <td><span class="tag t">Phase 2</span><strong>クエリ書き換え（Condense Question）</strong><br>履歴あり かつ 発話が短い／指示語を含む場合のみ実行。<code>num_predict: 64</code>。依存追加なし。</td>
+    </tr>
+    <tr>
+      <td class="order">3</td>
+      <td><span class="tag f">案3</span><strong>上位ページの本文取得＋チャンク再ランク</strong><br><code>trafilatura</code> 導入。本文を500〜800字チャンクに分割し既存 ONNX クロスエンコーダを再利用。<code>http_client.py</code> に HTML 取得関数を追加。</td>
+      <td><span class="tag u">Phase 1</span><strong>クエリ書き換え＋検索要否判定</strong><br>LLM に <code>{"need_search": bool, "query": ...}</code> を JSON で出力させる。雑談は検索自体をスキップ。</td>
+      <td><span class="tag k">B1</span><strong>検索前クエリ書き換え（最重要と明記）</strong><br><code>temperature 0</code>／<code>num_predict 64</code>。失敗時は元質問にフォールバック。</td>
+      <td><span class="tag t">Phase 3</span><strong>上位ページ本文取得＋チャンク Rerank</strong><br><code>trafilatura</code> 導入。並列2〜3本・タイムアウト5秒、合計1500〜2000字をプロンプトへ。</td>
+    </tr>
+    <tr>
+      <td class="order">4</td>
+      <td><span class="tag f">案4／案5</span><strong>効果を見て判断（分岐）</strong><br>案4＝チャンクごとの事実抽出（Map-Reduce、生成<em>前</em>）／案5＝モデル差し替え（<code>qwen3:4b</code>）。どちらを採るかは案1〜3の結果次第。</td>
+      <td><span class="tag u">Phase 4</span><strong>ストリーミング＋文単位 TTS</strong><br><code>stream: true</code> にして「。」ごとに Piper へ投入。多段化の追加秒数を体感で相殺する前提施策と位置づけ。<span class="diff">※4案中この案のみ</span></td>
+      <td><span class="tag k">C1</span><strong>本文フェッチ（<code>trafilatura</code>）</strong><br>Rerank 上位<strong>1〜2件</strong>の本文<strong>先頭800〜1200字</strong>を追加。タイムアウト3秒・失敗は非致命。</td>
+      <td><span class="tag t">Phase 4（任意）</span><strong>2段生成（Draft → Refine）</strong><br>草稿を検索結果と照合し音声向けに整形。「同一検索コンテキスト内の自己精緻化であり生成後検証ではない」と整理。</td>
+    </tr>
+    <tr>
+      <td class="order">5</td>
+      <td class="none">—（4ステップで完結）</td>
+      <td><span class="tag u">Phase 2-1〜2-4</span><strong>RAG の中身を厚くする</strong><br>本文取得（並列・timeout 3秒）＋200〜300字パッセージの二段 Rerank（計1,200〜1,600字）＋<strong>スコア閾値 <code>RERANK_MIN_SCORE</code></strong> ＋ 出典番号の保持。</td>
+      <td><span class="tag k">D1</span><strong><code>/api/chat</code> への移行</strong><br><code>conversation_history.py</code> に <code>as_messages()</code> を追加し履歴を user/assistant ペアで渡す。<span class="diff">※他3案は順序1に置いている</span></td>
+      <td><span class="tag t">Phase 5（任意）</span><strong>ハイブリッド検索（プライベートRAG）</strong><br><code>fastembed</code> or ONNX 埋め込み（ruri-small / multilingual-e5-small）＋ SQLite/FAISS。<code>future_extensions.md</code> #3 該当のため明示依頼待ちと明記。</td>
+    </tr>
+    <tr>
+      <td class="order">6</td>
+      <td class="none">—</td>
+      <td><span class="tag u">Phase 3</span><strong>推敲パス（draft → refine）</strong><br><code>ANSWER_REFINE_ENABLED</code> でオフ可能に。根拠のない記述の削除＋TTS 向け整形を1回で兼ねる。</td>
+      <td><span class="tag k">B2・C2・A3</span><strong>底上げ施策のまとめ実施</strong><br>B2＝検索要否 Router／C2＝<code>RERANK_TOP_K</code> 3→5・<code>SEARCH_CANDIDATE_LIMIT</code> 10→20／A3＝Whisper <code>initial_prompt</code> に直前話題。</td>
+      <td class="none">—（5フェーズで完結。モデル選択は「参考」章で別枠）</td>
+    </tr>
+    <tr>
+      <td class="order">7</td>
+      <td class="none">—</td>
+      <td><span class="tag u">Phase 5</span><strong>モデル／量子化の見直し</strong><br>まず量子化を上げる（<code>q5_K_M</code>／<code>q6_K</code>）→ <code>qwen3:4b</code>／<code>gemma3:4b</code>。判断は Phase 6 の評価セットで行う。</td>
+      <td><span class="tag k">B3・D2</span><strong>重い施策は最後に判断</strong><br>B3＝エビデンス抽出（+15〜30秒のためA〜C後に判断）／D2＝モデル変更（LFM2.5 1.2B JP など）。</td>
+      <td class="none">—</td>
+    </tr>
+    <tr>
+      <td class="order">8</td>
+      <td class="none">—</td>
+      <td><span class="tag u">Phase 2-5</span><strong>ローカル文書 RAG（用途次第）</strong><br><code>multilingual-e5-small</code> の ONNX 化 ＋ <code>sqlite-vec</code>／<code>hnswlib</code> ＋ <code>rank_bm25</code> を RRF でハイブリッド化。</td>
+      <td class="none">—</td>
+      <td class="none">—</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="note">
+<strong>表1から読み取れること</strong>
+<ul>
+  <li><strong>1番目は4案とも「Ollama の呼び出し設定を直す」で完全一致。</strong>依存追加なし・変更小・効果最大という評価も共通しており、ここは合議が成立している。</li>
+  <li>ただし <strong>Kimi だけが <code>/api/chat</code> 移行を5番目に後ろ倒し</strong>し、1番目は <code>/api/generate</code> のまま <code>system</code> を渡す最小改修にとどめている。他3案は <code>/api/chat</code> 移行を1番目に含める。</li>
+  <li>中盤は「クエリ書き換え → 本文取得」の順が Fable・Ultra・Kimi で共通。<strong>Fusion だけが評価基盤とストリーミングTTSを割り込ませ</strong>、本文取得が5番目まで下がる。</li>
+  <li>終盤は分岐する。Ultra・Fusion は<strong>推敲パス（draft→refine）を提案</strong>、Fable は<strong>生成前の Map-Reduce 事実抽出</strong>を提案、Kimi は<strong>推敲型の多段生成を明確に不採用</strong>（後述の表4を参照）。</li>
+</ul>
+</div>
+
+<h2>表2. 施策別に見た「各案が何番目に置いたか」</h2>
+<p class="caption">表1を施策側から見た逆引き。数字は各案の実施順序、「—」はその案が提案していない施策。</p>
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th style="width:30%">施策</th>
+      <th class="col-fable">Fable</th>
+      <th class="col-fusion">Fusion</th>
+      <th class="col-kimi">Kimi</th>
+      <th class="col-ultra">Ultra</th>
+      <th style="width:26%">差異の要点</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="axis">Ollama <code>options</code> 明示（num_ctx 等）</td>
+      <td><strong>1</strong></td><td><strong>1</strong></td><td><strong>1</strong></td><td><strong>1</strong></td>
+      <td><span class="same">4案一致</span>。最優先・依存なし・効果最大という評価も同じ。</td>
+    </tr>
+    <tr>
+      <td class="axis">回答長・スタイルのプロンプト指示</td>
+      <td>1（案1に内包）</td><td>1（0-3）</td><td><strong>2</strong>（A2で独立）</td><td>1（system に集約）</td>
+      <td>Kimi のみ独立ステップ。他3案は1番目のパッケージに含める。</td>
+    </tr>
+    <tr>
+      <td class="axis"><code>/api/chat</code> への移行</td>
+      <td>1</td><td>1（0-2）</td><td><span class="diff">5</span></td><td>1</td>
+      <td><span class="diff">最大の順序差</span>。Kimi は「まず低リスクな A1/A2 で効果を確認」という段階論。</td>
+    </tr>
+    <tr>
+      <td class="axis">会話履歴の拡張（turns / clip）</td>
+      <td>「4. 併せて直したい小さな点」に記載（順序外）</td><td>1（0-5）</td><td>—</td><td>1（Phase 1 の3項目目）</td>
+      <td>Fusion / Ultra は1番目に明記。Fable は付随項目扱い、Kimi は言及なし。</td>
+    </tr>
+    <tr>
+      <td class="axis">トークン予算管理（<code>prompt[:10000]</code> の置換）</td>
+      <td>指摘のみ（順序外）</td><td><strong>1</strong>（0-4 で具体策）</td><td>—</td><td>指摘のみ（「実質機能していない」）</td>
+      <td>Fusion のみ「num_ctx から逆算し検索コンテキストから削る／履歴と質問は死守」と実装方針まで提示。</td>
+    </tr>
+    <tr>
+      <td class="axis">検索前クエリ書き換え</td>
+      <td>2</td><td>3</td><td>3</td><td>2</td>
+      <td><span class="same">4案とも提案</span>。順序も2〜3番でほぼ一致。Kimi は「最重要の提案」と明記。</td>
+    </tr>
+    <tr>
+      <td class="axis">検索要否の判定（Router）</td>
+      <td>—</td><td>3（クエリ書き換えと同一 LLM 呼び出しに統合）</td><td>6（B2 として独立）</td><td>—</td>
+      <td>Fusion は1回の JSON 出力で兼ねる設計、Kimi は独立した「はい/いいえ」判定。Fable・Ultra は提案なし。</td>
+    </tr>
+    <tr>
+      <td class="axis">本文取得（<code>trafilatura</code>）</td>
+      <td>3</td><td>5</td><td>4</td><td>3</td>
+      <td><span class="same">4案とも <code>trafilatura</code> を第一候補に指名</span>。採用量は Kimi が最小（上位1〜2件・800〜1200字）、Ultra が最大（1500〜2000字）。</td>
+    </tr>
+    <tr>
+      <td class="axis">取得本文のチャンク／パッセージ再ランク</td>
+      <td>3（500〜800字チャンク）</td><td>5（200〜300字パッセージ）</td><td>—</td><td>3（段落チャンク）</td>
+      <td>Kimi のみ「本文の先頭を切り出すだけ」で再ランクを行わない。分割粒度も3案で異なる。</td>
+    </tr>
+    <tr>
+      <td class="axis">Reranker スコア閾値</td>
+      <td>—</td><td><strong>5</strong>（<code>RERANK_MIN_SCORE</code>）</td><td>—</td><td>—</td>
+      <td><span class="diff">Fusion のみ</span>。「全件閾値割れなら検索結果なし扱いにし、内部知識で答えさせる」。</td>
+    </tr>
+    <tr>
+      <td class="axis">生成後の推敲／2段生成</td>
+      <td>—（代わりに生成前 Map-Reduce を案4に）</td><td>6（draft→refine、既定オフ）</td><td><span class="diff">不採用と明記</span></td><td>4（任意）</td>
+      <td><span class="diff">評価が真っ二つ</span>。AGENTS.md「生成後検証への設計変更はしない」の解釈差（表4参照）。</td>
+    </tr>
+    <tr>
+      <td class="axis">評価ハーネス</td>
+      <td>—</td><td><strong>2</strong></td><td>—</td><td>—</td>
+      <td><span class="diff">Fusion のみ</span>。しかも上流に近い2番目に置き「これが無いと改善が空振りする」と位置づけ。</td>
+    </tr>
+    <tr>
+      <td class="axis">ストリーミング＋文単位 TTS</td>
+      <td>—</td><td><strong>4</strong></td><td>—</td><td>—</td>
+      <td><span class="diff">Fusion のみ</span>。多段化で増えた秒数を体感で回収する「多段化の前提」と位置づけ。</td>
+    </tr>
+    <tr>
+      <td class="axis">モデル／量子化の変更</td>
+      <td>4（案5、分岐扱い）</td><td>7</td><td>7（D2）</td><td>参考章（順序外）</td>
+      <td><span class="same">4案とも「最後に判断」で一致</span>。推奨モデルは割れる（表3参照）。</td>
+    </tr>
+    <tr>
+      <td class="axis">ローカル文書RAG（future_extensions #3）</td>
+      <td>—</td><td>8（用途次第）</td><td>—</td><td>5（任意・明示依頼待ち）</td>
+      <td>Fusion・Ultra とも最終順位に置き、着手には明示依頼が必要と注記。</td>
+    </tr>
+    <tr>
+      <td class="axis">Whisper <code>initial_prompt</code></td>
+      <td>—</td><td>—</td><td><strong>6</strong>（A3）</td><td>—</td>
+      <td><span class="diff">Kimi のみ</span>。「誤認識で検索クエリごと壊れる」を入口側で緩和。</td>
+    </tr>
+    <tr>
+      <td class="axis">話題リセット（<code>history.clear()</code>）</td>
+      <td>—</td><td><strong>1</strong>（0-6）</td><td>—</td><td>—</td>
+      <td><span class="diff">Fusion のみ</span>。「<code>clear()</code> がどこからも呼ばれていない」というコード根拠つき。</td>
+    </tr>
+    <tr>
+      <td class="axis"><code>keep_alive</code> 指定</td>
+      <td>—</td><td>—</td><td><strong>1</strong>（A1）</td><td>—</td>
+      <td><span class="diff">Kimi のみ</span>。LLM 複数回呼び出し時のモデル再ロード待ちを避けるため必須と主張。</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2>表3. 数値・前提の食い違い</h2>
+<p class="caption">同じ施策でも推奨値や現状認識が異なる箇所。実装時に決めが必要になるポイント。</p>
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th style="width:22%">項目</th>
+      <th class="col-fable">Fable</th>
+      <th class="col-fusion">Fusion</th>
+      <th class="col-kimi">Kimi</th>
+      <th class="col-ultra">Ultra</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="axis">Ollama 既定 <code>num_ctx</code> の認識</td>
+      <td>4096（GPU なし環境の既定）</td>
+      <td>2048（版により4096）</td>
+      <td>言及なし</td>
+      <td>2048</td>
+    </tr>
+    <tr>
+      <td class="axis">既定 <code>num_predict</code> の認識</td>
+      <td>未指定なので短くなりがち</td>
+      <td>サーバ既定／Modelfile 依存で保証できない</td>
+      <td><span class="diff">-1（無制限）。「128」はドキュメントの誤記と明言し、トークン上限は原因ではないと主張</span></td>
+      <td>未指定と指摘（既定値の言及なし）</td>
+    </tr>
+    <tr>
+      <td class="axis">推奨 <code>num_ctx</code></td>
+      <td>8192（<code>ollama ps</code> の CONTEXT 列で実割当を確認）</td>
+      <td>8192</td>
+      <td><span class="diff">4096</span></td>
+      <td>8192</td>
+    </tr>
+    <tr>
+      <td class="axis">推奨 <code>num_predict</code></td>
+      <td>512</td>
+      <td>512</td>
+      <td>512（暴走防止の上限であり短縮目的ではないと注記）</td>
+      <td>512</td>
+    </tr>
+    <tr>
+      <td class="axis">推奨 <code>temperature</code></td>
+      <td>0.2〜0.3</td>
+      <td>0.3（＋<code>top_p 0.9</code>、<code>stop</code> 指定）</td>
+      <td>0.3</td>
+      <td><span class="diff">0.7</span></td>
+    </tr>
+    <tr>
+      <td class="axis">回答長の指示</td>
+      <td>3〜6文で具体的に</td>
+      <td>3〜5文、結論→補足</td>
+      <td>3〜5文で具体的に</td>
+      <td>2〜4文、結論→補足</td>
+    </tr>
+    <tr>
+      <td class="axis">履歴 turns / clip</td>
+      <td>clip 200→400〜600（turns は言及なし）</td>
+      <td>turns 3→6、clip 200→500（直近1ターンはクリップなし）</td>
+      <td>言及なし</td>
+      <td>turns 3→5、clip 200→400</td>
+    </tr>
+    <tr>
+      <td class="axis"><code>RERANK_TOP_K</code></td>
+      <td>据え置き（本文取得で密度を上げる）</td>
+      <td>据え置き＋閾値導入</td>
+      <td><span class="diff">3→5、候補も 10→20</span></td>
+      <td>据え置き</td>
+    </tr>
+    <tr>
+      <td class="axis">クエリ書き換えの追加遅延</td>
+      <td>数秒程度</td>
+      <td>+1〜2秒</td>
+      <td><span class="diff">+5〜10秒</span></td>
+      <td>+2〜4秒</td>
+    </tr>
+    <tr>
+      <td class="axis">本文取得の追加遅延</td>
+      <td>数秒〜10秒程度</td>
+      <td>+2〜4秒</td>
+      <td>+1〜3秒</td>
+      <td><span class="diff">+5〜10秒</span></td>
+    </tr>
+    <tr>
+      <td class="axis">推奨モデル</td>
+      <td><code>qwen3:4b</code>（7B は num_ctx を圧迫するため非推奨と明示）</td>
+      <td>まず量子化を上げる（<code>q5_K_M</code>／<code>q6_K</code>）→ <code>qwen3:4b</code>／<code>gemma3:4b</code></td>
+      <td><span class="diff">LFM2.5 1.2B JP（約15 tok/s）を筆頭に実測表で比較。Gemma 3 4B も候補</span></td>
+      <td><code>qwen3:4b</code>（<code>/no_think</code> 併用）／<code>gemma3:4b</code></td>
+    </tr>
+    <tr>
+      <td class="axis">追加ライブラリ</td>
+      <td><code>trafilatura</code>（代替 <code>readability-lxml</code>）</td>
+      <td><code>trafilatura</code>／<code>sqlite-vec</code>（or <code>hnswlib</code>）／<code>rank_bm25</code></td>
+      <td><code>trafilatura</code> のみ</td>
+      <td><code>trafilatura</code>／（任意）<code>fastembed</code>・FAISS</td>
+    </tr>
+    <tr>
+      <td class="axis">新設する設定値の提示</td>
+      <td>方針のみ（<code>config.py</code>＋<code>.env.example</code> に追加と記載）</td>
+      <td><span class="diff">17項目の <code>.env</code> 案を全列挙</span></td>
+      <td>コード断片で <code>options</code> の具体値を提示</td>
+      <td>各 Phase の本文中に値を記載</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<div class="warn">
+<strong>実装前に決着が必要な相違点</strong>
+<ol>
+  <li><strong><code>num_ctx</code> を 8192 にするか 4096 にするか</strong>：3案が 8192、Kimi のみ 4096。Pi 5（8GB）でモデル本体と作業領域を取り合うため、モデル選定（表3最下部）とセットで決める必要がある。</li>
+  <li><strong><code>temperature</code> 0.3 か 0.7 か</strong>：Ultra だけが 0.7。「検索結果を事実として扱う」用途では低め（0.2〜0.3）が3案の多数意見。</li>
+  <li><strong><code>num_predict</code> 未指定が「回答が短い」原因か</strong>：Fable・Fusion・Ultra は原因の一つと見なすが、Kimi は既定 -1（無制限）だと明言して否定し、原因をプロンプトと材料の薄さに寄せている。実機で <code>/api/show</code> を確認すれば決着する論点。</li>
+  <li><strong>推敲パスを入れるか</strong>：Ultra・Fusion は「同一検索コンテキスト内の自己精緻化」として提案、Kimi は AGENTS.md の生成後検証禁止に抵触しうるとして不採用。Fable は生成<em>前</em>の Map-Reduce に置き換えて回避。</li>
+</ol>
+</div>
+
+<h2>表4. 各案に固有の視点</h2>
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th style="width:14%">案</th>
+      <th style="width:43%">他案にない提案・指摘</th>
+      <th>スタンスの特徴</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="axis"><span class="chip fable">Fable</span></td>
+      <td>
+        <ul>
+          <li>案4＝チャンクごとの事実抽出（Map-Reduce）。「小型モデルは短い作業を確実にこなすのが得意」という根拠づけ。</li>
+          <li>7B ではなく 4B を勧める理由を「モデル本体と作業スペースのメモリ取り合い」として非エンジニア向けに説明。</li>
+          <li><code>prompt[:10000]</code> は「先頭が残り末尾（＝質問）が消える方向」という切り詰め方向の指摘。</li>
+        </ul>
+      </td>
+      <td>4ステップに絞った最小構成。用語をかみ砕いた説明が多く、モデル交換の章だけ突出して丁寧。</td>
+    </tr>
+    <tr>
+      <td class="axis"><span class="chip fusion">Fusion</span></td>
+      <td>
+        <ul>
+          <li>評価ハーネス <code>scripts/eval.py</code> を2番目に配置（唯一）。</li>
+          <li>ストリーミング＋文単位 TTS を「多段化の前提」として順序4に配置（唯一）。</li>
+          <li><code>RERANK_MIN_SCORE</code> による「検索結果なし」経路（唯一）。</li>
+          <li><code>history.clear()</code> が未使用という死にコード指摘と話題リセット機能（唯一）。</li>
+          <li><code>stop</code> トークン未指定、出典番号 <code>[1]</code> 付与、質問を末尾に置く recency bias 活用。</li>
+          <li>全指摘に <code>src/brain.py:35-39</code> 形式の行番号根拠を添付。</li>
+        </ul>
+      </td>
+      <td>最も網羅的（8ステップ）。「改善を測る仕組み」と「体感速度の回収」まで含めた工程設計になっている。</td>
+    </tr>
+    <tr>
+      <td class="axis"><span class="chip kimi">Kimi</span></td>
+      <td>
+        <ul>
+          <li><code>num_predict</code> の既定は -1 であり短さの原因ではない、という他3案への反証。</li>
+          <li><code>keep_alive: 30m</code>（唯一）。</li>
+          <li>Whisper <code>initial_prompt</code> に直前話題を渡す入口側の対策（唯一）。</li>
+          <li>プロンプトに「検索結果が無関係なら無視してよい」を入れる文脈汚染の緩和策（唯一）。</li>
+          <li>推敲型の多段生成を AGENTS.md 抵触リスクとして明確に除外。</li>
+          <li>Pi 5 実測 tok/s の比較表と「現行でも300トークンで約40秒」という所要時間の見積り。</li>
+        </ul>
+      </td>
+      <td>制約遵守を最優先し、リスクの低い順に積む段階論。<code>/api/chat</code> 移行すら5番目まで後ろ倒しする慎重さ。</td>
+    </tr>
+    <tr>
+      <td class="axis"><span class="chip ultra">Ultra</span></td>
+      <td>
+        <ul>
+          <li>原因A〜Eを重要度順に並べ、各 Phase を「対応原因」と明示的に紐づけた表。</li>
+          <li>ページ取得を並列2〜3本・タイムアウト5秒と具体化。</li>
+          <li>推敲パスを「生成後検証ではなく同一検索コンテキスト内の自己精緻化」と定義して制約を回避。</li>
+          <li>ハイブリッド検索で <code>ruri-small</code> を候補に挙げる（唯一）。</li>
+        </ul>
+      </td>
+      <td>最もコンパクト（5フェーズ）。原因と対策の対応関係が一番追いやすく、「Phase 1 だけで再評価すべき」という判断点が明確。</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2>4案を統合した場合の実装順序（参考）</h2>
+<p class="caption">4案の合議点と、固有提案のうち順序に組み込む価値があるものを統合した案。AGENTS.md の「1 PR ＝ 1目的」に沿って1行＝1 PR の粒度にしている。</p>
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th style="width:52px">順序</th>
+      <th style="width:30%">内容</th>
+      <th style="width:16%">根拠となる案</th>
+      <th style="width:12%">依存追加</th>
+      <th>備考</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="order">1</td>
+      <td><code>brain.py</code> に <code>options</code>（<code>num_ctx</code>／<code>num_predict</code>／<code>temperature</code>／<code>repeat_penalty</code>）と <code>system</code> を追加し、<code>config.py</code>＋<code>.env.example</code> 経由で設定化</td>
+      <td>4案一致</td>
+      <td>なし</td>
+      <td>最小変更で最大効果。<code>temperature</code> は多数意見の 0.3 を初期値に。</td>
+    </tr>
+    <tr>
+      <td class="order">2</td>
+      <td><code>composer.py</code> のプロンプト強化（回答長 3〜5文・結論→補足・指示語は履歴参照・無関係な検索結果は無視可）</td>
+      <td>4案一致（Kimi は独立ステップ化）</td>
+      <td>なし</td>
+      <td>1と同一 PR にまとめてもよいが、効果の切り分けには分離が有利。</td>
+    </tr>
+    <tr>
+      <td class="order">3</td>
+      <td><code>/api/chat</code> 移行と履歴の messages 化（<code>as_messages()</code> 追加）、履歴 turns/clip の拡張、<code>prompt[:10000]</code> をトークン予算管理に置換</td>
+      <td>Fable・Fusion・Ultra（Kimi は後ろ倒し）</td>
+      <td>なし</td>
+      <td>Kimi の慎重論を採るなら1〜2の効果測定後に着手。</td>
+    </tr>
+    <tr>
+      <td class="order">4</td>
+      <td>評価ハーネス <code>scripts/eval.py</code> と日本語評価セットの整備</td>
+      <td>Fusion のみ</td>
+      <td>なし</td>
+      <td>以降の判断（特にモデル選定）の精度を決めるため、多段化の前に置く価値が高い。</td>
+    </tr>
+    <tr>
+      <td class="order">5</td>
+      <td>検索前クエリ書き換え＋検索要否判定（<code>temperature 0</code>／<code>num_predict 64</code>、失敗時は元発話にフォールバック）</td>
+      <td>4案一致（要否判定は Fusion・Kimi）</td>
+      <td>なし</td>
+      <td>「会話コンテキストが効かない」の構造的原因への本命対策。</td>
+    </tr>
+    <tr>
+      <td class="order">6</td>
+      <td>本文取得（<code>trafilatura</code>、並列・タイムアウト付き・失敗はスニペットへフォールバック）＋パッセージ再ランク＋<code>RERANK_MIN_SCORE</code></td>
+      <td>4案一致（閾値は Fusion のみ）</td>
+      <td><code>trafilatura</code></td>
+      <td>「回答が短い」の材料不足への本命対策。<code>http_client.py</code> に HTML 取得を追加。</td>
+    </tr>
+    <tr>
+      <td class="order">7</td>
+      <td>ストリーミング＋文単位 TTS で体感遅延を回収</td>
+      <td>Fusion のみ</td>
+      <td>なし</td>
+      <td>5・6で増えた秒数の相殺。<code>speaker.py</code> の変更を伴うため独立 PR が望ましい。</td>
+    </tr>
+    <tr>
+      <td class="order">8</td>
+      <td>モデル／量子化の見直し（量子化引き上げ → <code>qwen3:4b</code> 等）を評価セットで A/B 比較</td>
+      <td>4案一致（推奨モデルは相違）</td>
+      <td>モデルDL</td>
+      <td><code>OLLAMA_MODEL</code> の差し替えのみで戻せる低リスク施策。</td>
+    </tr>
+    <tr>
+      <td class="order">9</td>
+      <td>（保留）推敲パス／Map-Reduce 事実抽出／ローカル文書RAG</td>
+      <td>案ごとに評価が割れる</td>
+      <td>案による</td>
+      <td>推敲パスは AGENTS.md の解釈確認が必要。ローカル文書RAGは <code>future_extensions.md</code> #3 のため明示依頼待ち。</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<footer>
+  現状分析と改善案 4案の実装順序比較 ／ 2026年7月30日作成 ／ 出典: 現状分析と改善案_Fable.html・現状分析と改善案_Fusion.html・現状分析と改善案_Kimi.html・現状分析と改善案_Ultra.html
+</footer>
+
+</div>
+
+<script>
+function downloadThisPage() {
+  var html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+  var blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = '現状分析と改善案_実装順序比較.html';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+}
+</script>
+</body>
+</html>
