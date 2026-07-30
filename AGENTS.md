@@ -88,6 +88,8 @@ AIエージェント（Devin など）がこのリポジトリで作業する際
 - **retriever.py / brain.py**: 外部 API 通信部。テストでは必ずモック化する。
 - **status_led.py**: 非 Pi 環境や GPIO 未接続時に `gpiozero` を自動無効化する設計を壊さない
   （import 失敗・実行時失敗を握りつぶして処理を継続する）。
+- **push_to_talk.py**: 同じく `gpiozero` が使えない環境では自動無効化し、`RECORD_SECONDS` の
+  固定秒数録音にフォールバックする設計を壊さない。
 
 ## コミット・PR
 
