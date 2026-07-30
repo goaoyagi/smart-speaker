@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AGENTS.md 書き換え案 4案の比較と順位付け</title>
+<style>
+  :root {
+    --fg: #1f2328;
+    --muted: #59636e;
+    --border: #d8dee4;
+    --accent: #1f6feb;
+    --bg: #f6f8fa;
+    --ok: #1a7f37;
+    --warn: #9a6700;
+    --danger: #cf222e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 0 20px 96px;
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN",
+      "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", Meiryo, sans-serif;
+    line-height: 1.85;
+    color: var(--fg);
+    background: #fff;
+    font-size: 16px;
+  }
+  main { max-width: 1000px; margin: 0 auto; }
+  header.doc-header {
+    background: linear-gradient(135deg, #1b3a5c 0%, #2f6f8f 100%);
+    color: #fff;
+    border-radius: 14px;
+    padding: 32px 36px;
+    margin: 40px 0 28px;
+  }
+  header.doc-header h1 { margin: 0 0 10px; font-size: 1.65rem; line-height: 1.45; }
+  header.doc-header .meta { font-size: 0.85rem; opacity: 0.9; line-height: 1.7; }
+  h2 {
+    font-size: 1.3rem;
+    margin: 52px 0 14px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--fg);
+  }
+  h3 { font-size: 1.05rem; margin: 30px 0 8px; color: var(--muted); }
+  p { margin: 0 0 14px; }
+  ul, ol { margin: 0 0 16px; padding-left: 1.6em; }
+  li { margin: 5px 0; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.87em;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 1px 5px;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0 0 22px;
+    font-size: 14px;
+    background: #fff;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 8px 11px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--bg); font-weight: 700; }
+  thead th { white-space: nowrap; }
+  tbody tr:nth-child(even) { background: #fbfcfd; }
+  .axis { white-space: nowrap; font-weight: 600; }
+  .rank { text-align: center; font-weight: 700; width: 3.2em; }
+  .name { white-space: nowrap; font-weight: 700; }
+  .callout {
+    border-left: 4px solid var(--accent);
+    background: #f2f7fd;
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 18px 0;
+  }
+  .callout.warn { border-left-color: var(--warn); background: #fdf8ea; }
+  .callout.ok { border-left-color: var(--ok); background: #f1f8f3; }
+  .callout p:last-child { margin-bottom: 0; }
+  .tag {
+    display: inline-block;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 1px 9px;
+    color: #fff;
+    vertical-align: middle;
+  }
+  .t-open { background: var(--danger); }
+  .t-keep { background: var(--ok); }
+  .t-mid { background: var(--warn); }
+  .t-none { background: #8c959f; }
+  nav.toc {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 26px;
+    margin-bottom: 36px;
+    font-size: 0.93rem;
+    background: #fcfcfd;
+  }
+  nav.toc strong { display: block; margin-bottom: 6px; color: var(--muted); font-size: 0.8rem; letter-spacing: 0.06em; }
+  nav.toc ol { margin: 0; padding-left: 1.4em; }
+  nav.toc a { color: var(--accent); text-decoration: none; }
+  nav.toc a:hover { text-decoration: underline; }
+  footer {
+    margin-top: 60px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 0.8rem;
+  }
+  @media print {
+    body { padding: 0; font-size: 11.5px; }
+    header.doc-header { background: #1b3a5c !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    h2 { page-break-after: avoid; }
+    table { page-break-inside: auto; font-size: 10.5px; }
+    tr { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<main>
+
+<header class="doc-header">
+  <h1>AGENTS.md 書き換え案 4案の比較と順位付け</h1>
+  <div class="meta">
+    対象: <code style="background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.3);color:#fff">goaoyagi/smart-speaker</code> ／ 比較対象: Fusion 案・Kimi 案・Fable 案・Ultra 案<br>
+    観点: (1) 4案の差異 (2) 制約変更としての安全性の順位 (3) 今後の変更にとっての効果の順位<br>
+    作成: 2026年7月30日
+  </div>
+</header>
+
+<nav class="toc">
+  <strong>目次</strong>
+  <ol>
+    <li><a href="#summary">結論</a></li>
+    <li><a href="#diff">差異の比較表</a></li>
+    <li><a href="#facts">事実関係の裏取り結果</a></li>
+    <li><a href="#safety">安全性の順位付け</a></li>
+    <li><a href="#effect">効果の順位付け</a></li>
+    <li><a href="#combo">採るとしたらの組み合わせ</a></li>
+  </ol>
+</nav>
+
+<h2 id="summary">1. 結論</h2>
+<p>4案は「何を変えるか」より、<strong>生成後検証をどこまで許すか</strong>と<strong>射程の広さ</strong>で割れている。安全性は Ultra が最も高く Fusion が最も低い一方、効果は逆に Fusion が最も高く Ultra が最も低い、というほぼ反転した関係になっている。</p>
+
+<table>
+  <thead>
+    <tr><th>案</th><th>性格</th><th>安全性</th><th>効果</th></tr>
+  </thead>
+  <tbody>
+    <tr><td class="name">Fusion</td><td>全面改訂型。ルールと実態の乖離まで含めて8項目を洗い出し、評価基盤・依存管理・設定同期の仕組みごと整える</td><td>4位</td><td><strong>1位</strong></td></tr>
+    <tr><td class="name">Kimi</td><td>適用範囲限定型。根本思想は保護すると明言し、3件を「範囲の書き換え」で解く</td><td>3位</td><td>2位</td></tr>
+    <tr><td class="name">Fable</td><td>誤読リスク型。エージェントが作業を拒否する箇所を優先度順に潰す</td><td>2位</td><td>3位</td></tr>
+    <tr><td class="name">Ultra</td><td>段階適用型。追記のみで原文を削らず、使わないフェーズの緩和は入れない</td><td><strong>1位</strong></td><td>4位</td></tr>
+  </tbody>
+</table>
+
+<h2 id="diff">2. 差異の比較表</h2>
+<table>
+  <thead>
+    <tr><th>論点</th><th>Fusion</th><th>Kimi</th><th>Fable</th><th>Ultra</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="axis">前提の改善案</td>
+      <td>Phase 0〜6</td>
+      <td>改善案 A1 / B1 / B2 / C1 / D1</td>
+      <td>案1〜5</td>
+      <td>Phase 1〜4</td>
+    </tr>
+    <tr>
+      <td class="axis">提案項目数</td>
+      <td>8（必須3・推奨3・実態乖離2）</td>
+      <td>3（＋任意1・非変更3）</td>
+      <td>5（必須2・条件付2・任意1）</td>
+      <td>4（全て条件付）</td>
+    </tr>
+    <tr>
+      <td class="axis">生成前RAGの順序</td>
+      <td>7段のパイプラインを新定義。任意段は設定フラグで無効化可</td>
+      <td>「検索 → Reranking → プロンプト構成 → 生成」に修正し、生成前の多段化を許可</td>
+      <td>「最終回答の生成は検索の後に<strong>1回だけ</strong>」と再定義</td>
+      <td>原文維持＋「Condense Question は順序違反とみなさない」を追記</td>
+    </tr>
+    <tr>
+      <td class="axis">生成後検証・推敲</td>
+      <td><span class="tag t-open">解禁</span> 推敲段を許可。削除・要約・整形のみで事実追加と再検索は禁止</td>
+      <td><span class="tag t-keep">維持</span> 小型LLMでは検証器も弱く遅延が倍増するため禁止が妥当と評価</td>
+      <td><span class="tag t-keep">実質禁止</span> 生成は1回だけ、と上限を明記</td>
+      <td><span class="tag t-mid">定義で回避</span> Draft→Refine は生成後検証に当たらないと定義</td>
+    </tr>
+    <tr>
+      <td class="axis">日本語限定の<br>適用範囲</td>
+      <td>発話される最終出力のみ。内部LLM呼び出しは対象外</td>
+      <td>同左。検索クエリの英字固有名詞を明示的に許可</td>
+      <td><span class="tag t-none">言及なし</span></td>
+      <td>変更不要と判断</td>
+    </tr>
+    <tr>
+      <td class="axis">指示の置き場所</td>
+      <td><code>composer.py</code> 固定のまま</td>
+      <td><strong>固定を解除</strong>（プロンプト or system メッセージ）</td>
+      <td><strong>固定を解除</strong></td>
+      <td>変更不要と判断</td>
+    </tr>
+    <tr>
+      <td class="axis">エラー方針</td>
+      <td>任意段すべて非致命。degrade 先を4つ列挙＋<strong>タイムアウト必須</strong>を追加</td>
+      <td>補助LLM呼び出しを非致命と明記</td>
+      <td>補助LLM呼び出し＋本文取得を非致命と明記</td>
+      <td>変更不要（<code>SearchError</code> と同じ扱いで整合すると判断）</td>
+    </tr>
+    <tr>
+      <td class="axis">テストの<br>外部アクセス禁止</td>
+      <td><strong><code>tests/</code> 配下に範囲限定</strong></td>
+      <td>変更不要</td>
+      <td>変更不要</td>
+      <td>変更不要</td>
+    </tr>
+    <tr>
+      <td class="axis">評価スクリプト</td>
+      <td><strong><code>scripts/</code> 節を新設</strong>し実サービス接続を許可、pytest 対象外</td>
+      <td><span class="tag t-none">言及なし</span></td>
+      <td><span class="tag t-none">言及なし</span></td>
+      <td><span class="tag t-none">言及なし</span></td>
+    </tr>
+    <tr>
+      <td class="axis">依存管理</td>
+      <td><strong><code>requirements.txt</code> を正として新規作成</strong>。README と同期、PR に ARM64 可否を記載</td>
+      <td>PR に ARM64 実績・メモリ・起動時間の根拠を記載</td>
+      <td><span class="tag t-none">言及なし</span></td>
+      <td><strong><code>trafilatura</code> を名指しで許可</strong>（動的インポート＋フォールバック）</td>
+    </tr>
+    <tr>
+      <td class="axis">HTTPクライアント</td>
+      <td><span class="tag t-none">言及なし</span></td>
+      <td><span class="tag t-none">言及なし</span></td>
+      <td><strong>関数名固定を解除</strong>（<code>http_client.py</code> への集約は維持）</td>
+      <td><span class="tag t-none">言及なし</span></td>
+    </tr>
+    <tr>
+      <td class="axis">設定値の同期</td>
+      <td><strong><code>config.py</code> / <code>.env.example</code> / <code>README.md</code> の3点同期</strong>＋<code>test_config.py</code> に既定値検証を追加</td>
+      <td><span class="tag t-none">言及なし</span></td>
+      <td><span class="tag t-none">言及なし</span></td>
+      <td>README / <code>project_context.md</code> の同時更新に言及</td>
+    </tr>
+    <tr>
+      <td class="axis">future_extensions.md</td>
+      <td>実装時に同一PRで実装済みを追記するルールを追加</td>
+      <td><span class="tag t-none">言及なし</span></td>
+      <td>実装済み3件の削除を推奨（AGENTS.md 本体外）</td>
+      <td>着手時に項目番号を Issue / PR で紐付けるルールを追加</td>
+    </tr>
+    <tr>
+      <td class="axis"><code>print()</code> 禁止</td>
+      <td>起動メッセージの例外化を提案（別PRで是正）</td>
+      <td><span class="tag t-none">言及なし</span></td>
+      <td><span class="tag t-none">言及なし</span></td>
+      <td><span class="tag t-none">言及なし</span></td>
+    </tr>
+    <tr>
+      <td class="axis">project_context.md<br>との整合</td>
+      <td><span class="tag t-none">言及なし</span></td>
+      <td><strong>唯一明示的に指摘</strong></td>
+      <td><span class="tag t-none">言及なし</span></td>
+      <td>冒頭で対象に含めると宣言</td>
+    </tr>
+    <tr>
+      <td class="axis">適用戦略</td>
+      <td>PR-1〜5 に分割し、ルール改訂を先行</td>
+      <td>一括改訂</td>
+      <td>必須2件は実装前、残りは該当案の実装時</td>
+      <td><strong>フェーズ着手時に順次。使わないフェーズの緩和は入れない</strong></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="facts">3. 事実関係の裏取り結果</h2>
+<p>4案が根拠として挙げているリポジトリの実態を実際に確認したところ、指摘はいずれも正確だった。</p>
+<table>
+  <thead>
+    <tr><th>指摘</th><th>指摘した案</th><th>確認結果</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>requirements.txt</code> / <code>pyproject.toml</code> が存在しない</td>
+      <td>Fusion</td>
+      <td>いずれも実在しない。依存の一覧は README の pip コマンドのみ</td>
+    </tr>
+    <tr>
+      <td><code>config.py</code> と <code>.env.example</code> の既定値が不一致</td>
+      <td>Fusion</td>
+      <td><code>PTT_BUTTON_PIN</code> は 17 と 24、Piper のモデル／設定パスも 2 箇所とも相違</td>
+    </tr>
+    <tr>
+      <td><code>future_extensions.md</code> の #2・#4・#5 が実装済み</td>
+      <td>Fusion / Fable</td>
+      <td><code>status_led.py</code> / <code>conversation_history.py</code> / <code>push_to_talk.py</code> が実在</td>
+    </tr>
+    <tr>
+      <td><code>http_client.py</code> は JSON 専用でHTML本文を取得できない</td>
+      <td>Fable</td>
+      <td><code>http_get_json</code> / <code>http_post_json</code> の 2 関数のみ</td>
+    </tr>
+    <tr>
+      <td>AGENTS.md の処理順序に Reranking がなく <code>project_context.md</code> と不一致</td>
+      <td>Kimi</td>
+      <td>AGENTS.md は「検索 → プロンプト構成 → 生成」、<code>project_context.md</code> L37 は Reranking を含む</td>
+    </tr>
+    <tr>
+      <td><code>/api/chat</code> 移行時に <code>.env.example</code> の更新が必要</td>
+      <td>Ultra</td>
+      <td><code>OLLAMA_API_URL</code> の既定値は <code>/api/generate</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout warn">
+  <p><strong>4案いずれも拾えていない問題が1つある。</strong> <code>print()</code> の残存は Fusion が挙げた <code>brain.py</code> と <code>main.py</code> 以外に <code>retriever.py</code>・<code>audio_utils.py</code>・<code>button_led_test.py</code> にもある。さらに AGENTS.md 自身が「使え」と指示している <code>audio_utils.log_init</code> / <code>log_ready</code> の実装が <code>print()</code> である。つまりこの条文は現状ルールとして自己矛盾しており、単なる実装側の違反ではない。</p>
+</div>
+
+<h2 id="safety">4. 安全性の順位付け</h2>
+<p>制約変更なので「設計思想を毀損しないか」で並べると次の順になる。ただしこの順位だけで選ぶと危険で、その理由は表の下に記す。</p>
+<table>
+  <thead>
+    <tr><th class="rank">順位</th><th>案</th><th>安全性の根拠</th><th>残るリスク</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="rank">1</td>
+      <td class="name">Ultra</td>
+      <td>全変更が既存文の削除を伴わない追記のみ。「使わないフェーズの先回り緩和はしない」と明記し、緩和の総量を時間軸で絞っている</td>
+      <td>安全すぎて実際の衝突を潰しきれていない（下記参照）</td>
+    </tr>
+    <tr>
+      <td class="rank">2</td>
+      <td class="name">Fable</td>
+      <td>「最終回答の生成は1回だけ」という上限を新たに課すため、多段生成の暴走を構造的に防ぐ。緩和は4点に限定</td>
+      <td>日本語限定制約の内部呼び出しの扱いが未定義で、実装時に解釈が揺れる</td>
+    </tr>
+    <tr>
+      <td class="rank">3</td>
+      <td class="name">Kimi</td>
+      <td>生成後検証禁止を維持し、根本思想を「書き換えない方がいいもの」として明示的に保護。緩和を適用範囲の限定に徹している。二重ルールの矛盾を潰す唯一の案</td>
+      <td>生成後検証を将来許したくなった時点で再度の改訂判断が必要</td>
+    </tr>
+    <tr>
+      <td class="rank">4</td>
+      <td class="name">Fusion</td>
+      <td>ガードレール（削除・要約・整形のみ／事実追加と再検索の禁止／<code>scripts/</code> 限定）は4案中最も丁寧</td>
+      <td>解禁範囲が最大。特に外部サービス実アクセスの許可は、CI での偶発アクセスやテスト分離の崩壊につながりうる</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <p><strong>リスクは2種類あり、この順位は片方しか測っていない。</strong> 「ルールを緩めすぎて設計思想が壊れるリスク」では上表の通りだが、「ルールが実態に追いつかず、エージェントが誤った実装をするリスク」では順位がほぼ逆転する。</p>
+  <p>その典型が Ultra のエラー方針である。Ultra はクエリ書き換えの失敗を <code>SearchError</code> と同じ非致命として扱えば整合すると書いているが、実際にはクエリ書き換えは Ollama 呼び出しなので、素直に実装すれば <code>GenerationError</code> が送出される。現行 AGENTS.md はこれを致命と定めているため、明文化しないまま実装すると<strong>補助処理の失敗で会話ターン全体が落ちる実装が正当化されてしまう</strong>。Fable と Fusion が「最重要」に置いているのはこの点である。同様に、Ultra が「Phase 1 は変更不要」とした日本語限定制約も、<code>/api/chat</code> に移行して指示が system メッセージへ移ると <code>composer.py</code> 固定の文言と衝突する。</p>
+  <p><strong>Ultra は紙の上で最も安全だが、実装局面では最も危うい</strong>という評価になる。</p>
+</div>
+
+<h2 id="effect">5. 今後の変更にとっての効果の順位付け</h2>
+<table>
+  <thead>
+    <tr><th class="rank">順位</th><th>案</th><th>効果の根拠</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="rank">1</td>
+      <td class="name">Fusion</td>
+      <td>唯一 <code>scripts/</code> の評価ハーネスを制度化している。改善の効果を実測する基盤がなければ以降の改善はすべて勘になるため、単発の緩和より波及が大きい。加えて依存管理の正（<code>requirements.txt</code>）の定義、設定3点同期＋<code>test_config.py</code> での既定値検証という再発防止の仕組み、エラー方針の degrade 先の具体列挙とタイムアウト必須化まで含む</td>
+    </tr>
+    <tr>
+      <td class="rank">2</td>
+      <td class="name">Kimi</td>
+      <td>3件に絞りながら、いずれも「適用範囲の書き換え」という汎用性の高い形になっている。日本語限定制約について適用範囲と置き場所の両方を同時に外しており、この論点では4案中唯一の完全解。<code>project_context.md</code> との文言整合という指摘も、片方だけ直して次のエージェントが矛盾した指示を読む事故を防ぐ</td>
+    </tr>
+    <tr>
+      <td class="rank">3</td>
+      <td class="name">Fable</td>
+      <td>「エージェントがルール違反と判断して作業を拒否する」という誤読リスクの観点が明快で、優先度の付け方が実務的。<code>http_client.py</code> の関数名固定は他3案が見落とした実際の詰まりどころ（JSON 専用の2関数では HTML 本文を取れない）。ただし依存管理・評価基盤・設定同期には触れず射程は中程度</td>
+    </tr>
+    <tr>
+      <td class="rank">4</td>
+      <td class="name">Ultra</td>
+      <td>「Phase 1 は改訂不要」という判断自体は正しく、段階適用の方針も筋がいい。ただしエラー方針を変更不要としたのは実装上危うく、<code>trafilatura</code> を名指しで許可する書き方は個別最適で、次の依存追加時にまた改訂が要る。ルールとしてスケールしない</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="combo">6. 採るとしたらの組み合わせ</h2>
+<p>安全性と効果の順位が反転している以上、単独採用よりも組み合わせが合理的である。</p>
+<div class="callout ok">
+  <p>骨格には <strong>Kimi の「適用範囲を書き換える」方針</strong>を置き、そこに <strong>Fusion の運用系項目</strong>（<code>scripts/</code> の新設、<code>requirements.txt</code> の正典化、設定3点同期）、<strong>Fable の <code>http_client.py</code> の関数名固定解除</strong>、<strong>Ultra の「先回り緩和はしない」段階適用ポリシー</strong>を足す形が、安全性と効果の両立という意味では最もバランスが取れる。</p>
+</div>
+<p>そのうえで、<strong>生成後検証（推敲・Draft→Refine）を許すかどうかだけは他と切り離した独立の意思決定にすべき</strong>である。ここは Fusion が解禁、Kimi が禁止維持、Fable が生成1回の上限で実質禁止、Ultra が定義変更で回避と、4案が真っ二つに割れている唯一の論点であり、なし崩しに文言を混ぜると意図が曖昧なルールが残る。</p>
+
+<footer>
+  AGENTS.md 書き換え案 4案の比較と順位付け ／ 2026-07-30
+</footer>
+
+</main>
+</body>
+</html>
