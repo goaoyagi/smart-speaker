@@ -12,24 +12,31 @@
 6. **[口] speaker.py**: `piper-tts-plus` で音声合成して発話
 7. **[視覚] status_led.py**: GPIO接続のLEDで、待機・聞き取り・検索・思考・発話・エラーを表示
 8. **[操作] push_to_talk.py**: GPIO接続のボタンを押している間だけ録音するプッシュ・トゥ・トーク
+9. **[記憶] conversation_history.py**: 直近N回の問いと答えを保持し、再復唱と文脈を踏まえた深掘り質問に対応
 
 ## 必要依存ライブラリ
 
-### 開発・テスト用
-```bash
-sudo apt install python3-pytest python3-pytest-mock python3-numpy python3-requests
-```
+依存ライブラリは `pyproject.toml` で管理しています。
 
 ### 本番ロジック用
 ```bash
-pip install faster-whisper piper-tts-plus requests optimum[onnxruntime] transformers fugashi unidic-lite
+pip install .
 ```
 
-または既存の仮想環境を使用:
+### 開発・テスト用
 ```bash
-# 仮想環境をアクティベート
+pip install -e ".[dev]"
+```
+
+### Raspberry Pi（GPIO を使う場合）
+```bash
+pip install ".[pi]"
+```
+
+既存の仮想環境を使う場合:
+```bash
 source venv/bin/activate
-python3 -m src.main
+pip install -e ".[dev]"
 ```
 
 ## セットアップ
@@ -108,6 +115,7 @@ smart-speaker/
 ├── project_context.md      # プロジェクト要件
 ├── future_extensions.md    # 将来の機能拡張バックログ
 ├── README.md               # 本ファイル（セットアップ・実行方法）
+├── pyproject.toml          # 依存ライブラリの定義
 ├── .gitignore              # Git除外設定
 ├── .env.example            # 環境変数テンプレート
 ├── models/
@@ -123,6 +131,8 @@ smart-speaker/
 │   ├── speaker.py          # Piper-Plus TTS
 │   ├── status_led.py       # GPIO ステータスLED制御
 │   ├── push_to_talk.py     # GPIOボタンによるプッシュ・トゥ・トーク
+│   ├── conversation_history.py  # マルチターン対話の履歴管理
+│   ├── button_led_test.py  # LED・ボタンの物理配線確認用
 │   ├── config.py           # 環境変数の一元管理・URL検証
 │   ├── http_client.py      # 共通HTTPクライアント
 │   ├── exceptions.py       # ドメイン固有の例外
@@ -138,6 +148,7 @@ smart-speaker/
     ├── test_speaker.py
     ├── test_status_led.py
     ├── test_push_to_talk.py
+    ├── test_conversation_history.py
     ├── test_config.py
     ├── test_http_client.py
     └── test_audio_utils.py
@@ -148,5 +159,6 @@ smart-speaker/
 - **speaker.py**: 本家Piper（espeak-ng依存）は日本語のアクセント解析が未対応のため、必ず `piper-tts-plus` を使用すること
 - **retriever.py（Reranking）**: 標準構成として既定で有効。依存ライブラリ未導入時や処理に失敗した場合は自動的にスキップされ、検索結果をそのまま使用する
 - **status_led.py**: `gpiozero` は Raspberry Pi 上でのみ動作するため、非Pi環境では自動的に無効化される
+- **conversation_history.py**: 直近 `CONVERSATION_MAX_TURNS` 回分の問いと答えを保持し、要約してプロンプトに埋め込む。「もう一回言って」などの再復唱コマンドは、検索・生成を行わず直前の回答をそのまま発話する
 - **push_to_talk.py**: GPIOボタンが利用できる環境では「押している間だけ録音」するプッシュ・トゥ・トークで動作する。ボタンが無い非Pi環境（`gpiozero` 不在）では自動的に無効化され、`RECORD_SECONDS` の固定秒数録音にフォールバックする。`PTT_MIN_RECORD_SECONDS` / `PTT_MAX_RECORD_SECONDS` で最小・最大録音時間を制御する
 - **テスト実行時**: 外部API（SearXNG/Ollama）にリクエストを飛ばさず、`pytest-mock` でモック化すること
