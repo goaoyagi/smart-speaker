@@ -83,3 +83,49 @@ def test_condensed_context_clips_long_answer():
     assert "…" in context
     # clipped answer (10 chars) + ellipsis, far shorter than the original 50
     assert len(context) < 50
+
+
+def test_summarizer_is_used_when_provided():
+    calls = []
+
+    def fake_summarizer(text):
+        calls.append(text)
+        return "要約結果"
+
+    history = ConversationHistory(max_turns=3, summarizer=fake_summarizer)
+    history.add("東京の天気は？", "晴れです。")
+
+    assert history.as_condensed_context() == "要約結果"
+    assert len(calls) == 1
+    assert "東京の天気は？" in calls[0]  # raw template passed to summarizer
+
+
+def test_summarizer_not_called_when_history_empty():
+    calls = []
+
+    def fake_summarizer(text):
+        calls.append(text)
+        return "要約結果"
+
+    history = ConversationHistory(summarizer=fake_summarizer)
+    assert history.as_condensed_context() == ""
+    assert calls == []
+
+
+def test_summarizer_failure_falls_back_to_template():
+    def failing_summarizer(text):
+        raise RuntimeError("LLM down")
+
+    history = ConversationHistory(summarizer=failing_summarizer)
+    history.add("東京の天気は？", "晴れです。")
+
+    context = history.as_condensed_context()
+    assert "東京の天気は？" in context  # fell back to template
+
+
+def test_summarizer_empty_result_falls_back_to_template():
+    history = ConversationHistory(summarizer=lambda text: "   ")
+    history.add("東京の天気は？", "晴れです。")
+
+    context = history.as_condensed_context()
+    assert "東京の天気は？" in context

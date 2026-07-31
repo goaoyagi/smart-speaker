@@ -14,7 +14,7 @@ from .speaker import Speaker
 from .conversation_history import ConversationHistory
 from .status_led import StatusLED, LedState
 from .push_to_talk import PushToTalkButton
-from .config import PTT_MIN_RECORD_SECONDS, PTT_MAX_RECORD_SECONDS
+from .config import PTT_MIN_RECORD_SECONDS, PTT_MAX_RECORD_SECONDS, CONVERSATION_SUMMARY_MODE
 from .exceptions import (
     VoiceAssistantError,
     ListenerError,
@@ -36,7 +36,11 @@ class VoiceAssistant:
         self.composer = Composer()
         self.brain = Brain()
         self.speaker = Speaker()
-        self.history = ConversationHistory()
+
+        summarizer = None
+        if CONVERSATION_SUMMARY_MODE == "llm":
+            summarizer = self.brain.summarize_history
+        self.history = ConversationHistory(summarizer=summarizer)
         self.status_led = StatusLED()
         self.button = PushToTalkButton()
 
