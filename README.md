@@ -114,9 +114,9 @@ python3 -m pytest tests/ -v
 | ステータスLED | 23 | `STATUS_LED_PIN` |
 | プッシュ・トゥ・トークのボタン | 24 | `PTT_BUTTON_PIN` |
 
-Raspberry Piに接続したLEDやボタンが物理的に正しく配線されているか確認するためのテストモジュールです。ボタンを押している間LEDが点灯します：
+Raspberry Piに接続したLEDやボタンが物理的に正しく配線されているか確認するためのスクリプトです。ボタンを押している間LEDが点灯します：
 ```bash
-python3 src/button_led_test.py
+python3 scripts/button_led_test.py
 ```
 
 ## ディレクトリ構成
@@ -144,11 +144,12 @@ smart-speaker/
 │   ├── status_led.py       # GPIO ステータスLED制御
 │   ├── push_to_talk.py     # GPIOボタンによるプッシュ・トゥ・トーク
 │   ├── conversation_history.py  # マルチターン対話の履歴管理
-│   ├── button_led_test.py  # LED・ボタンの物理配線確認用
 │   ├── config.py           # 環境変数の一元管理・URL検証
 │   ├── http_client.py      # 共通HTTPクライアント
 │   ├── exceptions.py       # ドメイン固有の例外
 │   └── audio_utils.py      # 音声・ログ共通ユーティリティ
+├── scripts/                # 手動実行スクリプト（pytest対象外）
+│   └── button_led_test.py  # LED・ボタンの物理配線確認用
 └── tests/
     ├── __init__.py
     ├── conftest.py         # pytest共通フィクスチャ
@@ -163,7 +164,8 @@ smart-speaker/
     ├── test_conversation_history.py
     ├── test_config.py
     ├── test_http_client.py
-    └── test_audio_utils.py
+    ├── test_audio_utils.py
+    └── test_logging_policy.py  # src/ に print() が無いことを検証
 ```
 
 ## 注意点
