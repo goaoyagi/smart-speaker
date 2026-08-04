@@ -107,6 +107,13 @@ python3 -m pytest tests/ -v
 
 ### ハードウェアの物理動作確認
 
+既定の配線は次のとおりです。ボタンは GPIO と GND の間に接続します（内蔵プルアップを使用）。
+
+| 部品 | GPIO | 設定項目 |
+| --- | --- | --- |
+| ステータスLED | 23 | `STATUS_LED_PIN` |
+| プッシュ・トゥ・トークのボタン | 24 | `PTT_BUTTON_PIN` |
+
 Raspberry Piに接続したLEDやボタンが物理的に正しく配線されているか確認するためのテストモジュールです。ボタンを押している間LEDが点灯します：
 ```bash
 python3 src/button_led_test.py

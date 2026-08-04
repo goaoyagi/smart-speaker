@@ -32,7 +32,7 @@ def test_default_config_values():
     assert config.STATUS_LED_ENABLED is True
     assert config.STATUS_LED_PIN == 23
     assert config.PUSH_TO_TALK_ENABLED is True
-    assert config.PTT_BUTTON_PIN == 17
+    assert config.PTT_BUTTON_PIN == 24
     assert config.PTT_BOUNCE_TIME == 0.05
     assert config.PTT_MIN_RECORD_SECONDS == 0.5
     assert config.PTT_MAX_RECORD_SECONDS == 30

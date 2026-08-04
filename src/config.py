@@ -74,7 +74,7 @@ STATUS_LED_PIN = int(os.getenv("STATUS_LED_PIN", "23"))
 
 # Push-to-talk (GPIO button) settings
 PUSH_TO_TALK_ENABLED = os.getenv("PUSH_TO_TALK_ENABLED", "true").lower() in ("1", "true", "yes")
-PTT_BUTTON_PIN = int(os.getenv("PTT_BUTTON_PIN", "17"))
+PTT_BUTTON_PIN = int(os.getenv("PTT_BUTTON_PIN", "24"))
 PTT_BOUNCE_TIME = float(os.getenv("PTT_BOUNCE_TIME", "0.05"))
 PTT_MIN_RECORD_SECONDS = float(os.getenv("PTT_MIN_RECORD_SECONDS", "0.5"))
 PTT_MAX_RECORD_SECONDS = float(os.getenv("PTT_MAX_RECORD_SECONDS", "30"))
