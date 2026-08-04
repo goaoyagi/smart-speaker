@@ -31,7 +31,9 @@ def test_button_available_and_events():
         button = PushToTalkButton()
 
         assert button.available is True
-        sys.modules['gpiozero'].Button.assert_called_once_with(17, bounce_time=0.05)
+        sys.modules['gpiozero'].Button.assert_called_once_with(
+            17, pull_up=True, bounce_time=0.05
+        )
 
         assert button.wait_for_press() is True
         assert button.wait_for_release(timeout=5) is True

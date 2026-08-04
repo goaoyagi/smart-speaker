@@ -28,7 +28,11 @@ class PushToTalkButton:
 
         try:
             import gpiozero
-            self._button = gpiozero.Button(PTT_BUTTON_PIN, bounce_time=PTT_BOUNCE_TIME)
+            # pull_up=True declares the wiring: the button sits between the GPIO
+            # pin and GND, so the pin idles HIGH and reads LOW while held.
+            self._button = gpiozero.Button(
+                PTT_BUTTON_PIN, pull_up=True, bounce_time=PTT_BOUNCE_TIME
+            )
         except Exception as e:
             logger.warning("Push-to-talk button unavailable: %s", e)
             self._button = None
