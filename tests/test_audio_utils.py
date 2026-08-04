@@ -4,6 +4,7 @@ Tests for shared audio_utils module
 """
 
 import pytest
+import logging
 import os
 import tempfile
 from src.audio_utils import TempWavFile, log_init, log_ready
@@ -33,15 +34,15 @@ def test_temp_wav_file_deletes_on_exception(tmp_path):
     assert not os.path.exists(saved_path)
 
 
-def test_log_init(capsys):
-    """Test log_init prints correct message"""
-    log_init("TestModule")
-    captured = capsys.readouterr()
-    assert "Initializing TestModule..." in captured.out
+def test_log_init(caplog):
+    """Test log_init logs correct message"""
+    with caplog.at_level(logging.INFO, logger="src.audio_utils"):
+        log_init("TestModule")
+    assert "Initializing TestModule..." in caplog.text
 
 
-def test_log_ready(capsys):
-    """Test log_ready prints correct message"""
-    log_ready("TestModule")
-    captured = capsys.readouterr()
-    assert "TestModule initialized!" in captured.out
+def test_log_ready(caplog):
+    """Test log_ready logs correct message"""
+    with caplog.at_level(logging.INFO, logger="src.audio_utils"):
+        log_ready("TestModule")
+    assert "TestModule initialized!" in caplog.text
