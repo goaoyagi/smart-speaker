@@ -6,6 +6,7 @@ Main orchestrator - Coordinates all components for voice assistant
 import logging
 import time
 import numpy as np
+from .audio_utils import log_init, log_ready
 from .listener import Listener
 from .retriever import Retriever
 from .composer import Composer
@@ -28,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 class VoiceAssistant:
     def __init__(self):
-        print("Initializing Voice Assistant...")
+        log_init("Voice Assistant")
 
         # Initialize all components
         self.listener = Listener()
@@ -40,7 +41,7 @@ class VoiceAssistant:
         self.status_led = StatusLED()
         self.button = PushToTalkButton()
 
-        print("Voice Assistant initialized!")
+        log_ready("Voice Assistant")
 
     def run(self):
         """Run the assistant using push-to-talk when a button is available,
