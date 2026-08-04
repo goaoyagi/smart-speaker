@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "smart-speaker"
+version = "0.1.0"
+description = "ローカルRAG構成のAIスマートスピーカー（Raspberry Pi 5）"
+readme = "README.md"
+requires-python = ">=3.9"
+
+# 依存の正はこのファイル。追加・変更時は README.md のセットアップ手順と
+# project_context.md の依存ライブラリ一覧もあわせて更新する（AGENTS.md 参照）。
+dependencies = [
+    "requests",        # SearXNG / Ollama との HTTP 通信
+    "numpy",           # 録音データの配列処理
+    "faster-whisper",  # 音声認識（listener.py）
+    "piper-tts-plus",  # 日本語特化 TTS（speaker.py）。本家 piper は使わない
+    "optimum[onnxruntime]",  # Reranking 用 ONNX 実行基盤（retriever.py）
+    "transformers",    # Reranking モデルのトークナイズ・推論
+    "fugashi",         # 日本語形態素解析
+    "unidic-lite",     # fugashi 用辞書
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-mock",
+]
+# Raspberry Pi でのみインストールする。非 Pi 環境では status_led.py /
+# push_to_talk.py が gpiozero の不在を検知して自動的に無効化される。
+pi = [
+    "gpiozero",
+]
+
+[tool.setuptools]
+packages = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
