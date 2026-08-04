@@ -85,6 +85,8 @@ smart-speaker/
 │   ├── http_client.py      # 共通HTTPクライアント
 │   ├── exceptions.py       # ドメイン固有の例外
 │   └── audio_utils.py      # 音声・ログ共通ユーティリティ
+├── scripts/                # 手動実行スクリプト（pytest対象外）
+│   └── button_led_test.py
 └── tests/
     ├── __init__.py
     ├── conftest.py         # pytest共通フィクスチャ・モック定義
@@ -99,5 +101,6 @@ smart-speaker/
     ├── test_conversation_history.py
     ├── test_config.py
     ├── test_http_client.py
-    └── test_audio_utils.py
+    ├── test_audio_utils.py
+    └── test_logging_policy.py
 ```
