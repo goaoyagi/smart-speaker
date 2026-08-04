@@ -57,11 +57,16 @@ pip install -e ".[dev]"
    ```
 
 3. **音声モデルの配置**
+
+   Piper TTS の音声モデル（日本語ONNX）とその設定ファイルを `models/piper/` に配置します。
    ```bash
-   # Piper TTSモデルをプロジェクトルートのmodels/ディレクトリに配置
-   mkdir -p models
-   # モデルファイルを models/ に配置
+   mkdir -p models/piper
+   # models/piper/tsukuyomi.onnx      … 音声モデル本体
+   # models/piper/tsukuyomi.onnx.json … 対応する設定ファイル
    ```
+
+   設定ファイルは Piper の慣例に従い、モデル名に `.json` を付けた名前にします。
+   別のモデルを使う場合は `.env` の `PIPER_MODEL_PATH` / `PIPER_CONFIG_PATH` で指定してください。
 
 4. **Rerankingモデルの配置**
 
