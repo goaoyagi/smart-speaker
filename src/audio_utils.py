@@ -4,8 +4,11 @@ Shared audio utilities - Eliminates duplicated temp-WAV-file lifecycle
 in listener.py and speaker.py.
 """
 
+import logging
 import os
 import tempfile
+
+logger = logging.getLogger(__name__)
 
 
 class TempWavFile:
@@ -35,9 +38,9 @@ class TempWavFile:
 
 def log_init(component_name):
     """Standard init logging shared by all components."""
-    print(f"Initializing {component_name}...")
+    logger.info("Initializing %s...", component_name)
 
 
 def log_ready(component_name):
     """Standard ready logging shared by all components."""
-    print(f"{component_name} initialized!")
+    logger.info("%s initialized!", component_name)

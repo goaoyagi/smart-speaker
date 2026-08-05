@@ -135,11 +135,11 @@ class Retriever:
     def search_web(self, query):
         """Search web using local SearXNG, then optionally rerank results."""
         if not isinstance(query, str) or not query.strip():
-            print("Empty or invalid query")
+            logger.warning("Empty or invalid query")
             return []
         query = query.strip()[:500]
 
-        print(f"Searching web for: {query}")
+        logger.info("Searching web for: %s", query)
 
         params = {
             'q': query,

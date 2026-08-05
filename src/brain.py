@@ -26,7 +26,7 @@ class Brain:
             return "申し訳ありませんが、質問が空です。"
         prompt = prompt[:10000]
 
-        print("Generating response with AI...")
+        logger.info("Generating response with AI...")
 
         data = http_post_json(
             self.ollama_api_url,
