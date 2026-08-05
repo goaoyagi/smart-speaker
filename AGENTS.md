@@ -50,15 +50,19 @@ AIエージェント（Devin など）がこのリポジトリで作業する際
 - ルートの `conftest.py` が `src/` を `sys.path` に追加しているため、
   テストは `from src.X import ...` でモジュールを import できる。
 
-## 評価スクリプト（scripts/）
+## スクリプト（scripts/）
 
-回答品質の計測を、テストの外部アクセス禁止と両立させるためのルール。
+pytest で自動実行しない、手動実行のスクリプトを置く。テストの外部アクセス禁止と、
+評価やハードウェア確認の必要性を両立させるためのルール。
 
-- 回答品質の評価・ベンチマーク用スクリプトは `scripts/` に置く。`tests/` には置かない。
-- `scripts/` 配下は**実サービス（SearXNG / Ollama）への接続を許可**する。ただしハードウェア
-  （マイク・スピーカー・GPIO）には依存させず、テキスト入出力だけでパイプラインを実行できるようにする。
-- `python3 -m pytest tests/ -v` の対象外とする（`scripts/` にテストを置かない）。
+- `tests/` には置かない。`python3 -m pytest tests/ -v` の対象外とする。
 - 設定値は `src/config.py` 経由で読む。`scripts/` でも `os.getenv()` を直接呼ばない。
+- 実行者に向けた対話メッセージは `print()` を使ってよい（`src/` 配下の `print()` 禁止は適用しない）。
+- **評価・ベンチマーク用**: 実サービス（SearXNG / Ollama）への接続を許可する。ただしハードウェア
+  （マイク・スピーカー・GPIO）には依存させず、テキスト入出力だけでパイプラインを実行できるようにする。
+- **ハードウェア確認用**: GPIO などの実ハードウェアに直接アクセスしてよい。Raspberry Pi 上で
+  手動実行する前提とする。ピン番号などの設定値は `src/config.py` から読み、スクリプト内に
+  直接書かない（設定が二重管理になり、実装と食い違う原因になる）。
 
 ## コーディング規約
 
@@ -77,7 +81,8 @@ AIエージェント（Devin など）がこのリポジトリで作業する際
 - **例外は `src/exceptions.py`** のドメイン固有例外を使う
   （`ListenerError`, `SearchError`, `GenerationError`, `SpeakerError`。基底は `VoiceAssistantError`）。
   裸の `Exception` を投げない。低レベル例外は `raise XxxError(...) from e` でラップする。
-- ロギングは `logging.getLogger(__name__)` を使い、`print()` でのデバッグ出力を残さない。
+- ロギングは `logging.getLogger(__name__)` を使う。**`src/` 配下では `print()` を使わない**
+  （`scripts/` の手動実行スクリプトのみ例外。`tests/test_logging_policy.py` が検証する）。
   初期化・準備完了のログは `audio_utils.log_init` / `log_ready` を使う。
 - 変更は最小限・対象を絞る。無関係なファイルやテストを書き換えない。
 
