@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AIスマートスピーカー 現状分析と改善案</title>
+<style>
+  :root {
+    --accent: #2563eb;
+    --accent-light: #eff6ff;
+    --text: #1f2937;
+    --text-muted: #6b7280;
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --border: #e5e7eb;
+    --code-bg: #0f172a;
+    --code-text: #e2e8f0;
+    --warn-bg: #fffbeb;
+    --warn-border: #f59e0b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Yu Gothic", "Noto Sans CJK JP", "Noto Sans JP", Meiryo, sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    line-height: 1.85;
+  }
+  .container { max-width: 920px; margin: 0 auto; padding: 40px 24px 80px; }
+  header.doc-header {
+    background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+    color: #fff;
+    border-radius: 16px;
+    padding: 36px 40px;
+    margin-bottom: 32px;
+  }
+  header.doc-header h1 { margin: 0 0 12px; font-size: 1.7rem; line-height: 1.4; }
+  header.doc-header .meta { font-size: 0.85rem; opacity: 0.85; }
+  nav.toc {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 28px;
+    margin-bottom: 40px;
+    font-size: 0.92rem;
+  }
+  nav.toc strong { display: block; margin-bottom: 8px; color: var(--text-muted); letter-spacing: 0.05em; }
+  nav.toc ol { margin: 0; padding-left: 1.4em; }
+  nav.toc a { color: var(--accent); text-decoration: none; }
+  nav.toc a:hover { text-decoration: underline; }
+  h2 {
+    font-size: 1.35rem;
+    margin: 48px 0 16px;
+    padding-left: 14px;
+    border-left: 5px solid var(--accent);
+  }
+  h3 { font-size: 1.1rem; margin: 32px 0 10px; }
+  h4 { font-size: 1rem; margin: 24px 0 8px; }
+  p { margin: 12px 0; }
+  ul, ol { padding-left: 1.6em; margin: 10px 0; }
+  li { margin: 6px 0; }
+  code {
+    font-family: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+    background: #eef2f7;
+    color: #be3455;
+    padding: 2px 6px;
+    border-radius: 5px;
+    font-size: 0.88em;
+  }
+  pre {
+    background: var(--code-bg);
+    color: var(--code-text);
+    border-radius: 10px;
+    padding: 18px 22px;
+    overflow-x: auto;
+    font-size: 0.85rem;
+    line-height: 1.7;
+    margin: 14px 0;
+  }
+  pre code { background: none; color: inherit; padding: 0; font-size: inherit; }
+  .code-caption {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin: 14px 0 -6px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+  }
+  .note {
+    background: var(--accent-light);
+    border-left: 4px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 16px 0;
+    font-size: 0.92rem;
+  }
+  .warn {
+    background: var(--warn-bg);
+    border-left: 4px solid var(--warn-border);
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    margin: 16px 0;
+    font-size: 0.92rem;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 0.9rem;
+    background: var(--card);
+  }
+  th, td { border: 1px solid var(--border); padding: 10px 12px; text-align: left; vertical-align: top; }
+  th { background: #f1f5f9; font-weight: 600; }
+  tr:nth-child(even) td { background: #fafbfc; }
+  .tag {
+    display: inline-block;
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 700;
+    border-radius: 6px;
+    padding: 2px 10px;
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+  .tag.b { background: #7c3aed; }
+  .tag.c { background: #059669; }
+  .tag.d { background: #d97706; }
+  footer {
+    margin-top: 64px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header class="doc-header">
+  <h1>AIスマートスピーカー 現状分析と改善案</h1>
+  <div class="meta">
+    対象： Raspberry Pi 5 ローカルRAG構成（SearXNG ＋ ONNX Reranker ＋ Ollama qwen2.5:3b ＋ piper-tts-plus）<br>
+    症状： 「回答が短すぎる」「会話コンテキストが保持されない」 ／ 前提： 応答時間の増加は許容 ／ 作成日： 2026年7月29日
+  </div>
+</header>
+
+<nav class="toc">
+  <strong>目次</strong>
+  <ol>
+    <li><a href="#sec1">現状のパイプライン</a></li>
+    <li><a href="#sec2">症状ごとの原因分析</a></li>
+    <li><a href="#sec3">改善提案（優先度順）</a></li>
+    <li><a href="#sec4">推奨ロードマップ</a></li>
+  </ol>
+</nav>
+
+<h2 id="sec1">1. 現状のパイプライン</h2>
+<p>コードを読んだ限り、構成自体は教科書通りの生成前RAGで、むしろよく整理されています。</p>
+<ul>
+  <li><code>retriever.py</code>: SearXNG で候補10件取得 → ONNX クロスエンコーダで Top3 に Rerank</li>
+  <li><code>composer.py</code>: 検索結果＋履歴文字列を単発プロンプトに埋め込み</li>
+  <li><code>brain.py</code>: Ollama <code>/api/generate</code> に1回 POST（<code>qwen2.5:3b</code>）</li>
+  <li><code>conversation_history.py</code>: 直近3ターンを保持し、回答は200字にクリップして文字列化</li>
+</ul>
+<p>つまり問題はアーキテクチャではなく、<strong>プロンプト設計・材料の薄さ・検索クエリの劣化</strong>にあります。</p>
+
+<h2 id="sec2">2. 症状ごとの原因分析</h2>
+
+<h3>2.1 「回答が短すぎる」の原因： 生成設定ではなくプロンプトと材料</h3>
+<div class="note">
+  まず一点、よくある誤解を潰しておくと、Ollama の <code>num_predict</code> デフォルトは <strong>-1（無制限）</strong> です（ドキュメントの「128」は誤記と公式 issue で訂正済み）。つまりトークン上限で切られているわけではありません。
+</div>
+<p>実際の原因は以下です。</p>
+
+<h4>① プロンプトに文量・構成の指示が一切ない</h4>
+<p class="code-caption">src/composer.py（29〜37行）</p>
+<pre><code>prompt = f"""以下の検索結果を『絶対に事実』として扱い、ユーザーの質問に日本語のみで答えなさい。
+回答にはアルファベット（英語の単語や文）を含めず、必要であればカタカナや日本語表現に翻訳して出力してください。
+
+{history_block}検索結果：
+{context}
+
+質問：{query}
+
+回答："""</code></pre>
+<p>「答えなさい」だけだと、3Bクラスのモデルは最小限の応答で打ち止めする傾向が強いです。「3〜5文で具体的に説明しなさい」のような指示があるだけで出力長は明確に変わります。</p>
+
+<h4>② 材料（エビデンス）が薄い</h4>
+<p><code>RERANK_TOP_K=3</code> × SearXNG のスニペットは各1〜2行（100〜300字程度）。材料が少なければ、どんなに指示しても回答は膨らみません。「絶対に事実として扱え」という強い縛りも、スニペットの表層的な言い換えで終わらせる方向に働いています。</p>
+
+<h4>③ system プロンプト未指定</h4>
+<p class="code-caption">src/brain.py（35〜39行）</p>
+<pre><code>json_body={
+    'model': self.ollama_model,
+    'prompt': prompt,
+    'stream': False
+},</code></pre>
+<p><code>/api/generate</code> は <code>raw</code> 未指定だとモデルのチャットテンプレートが適用され、<code>system</code> を渡さないと Qwen 既定の英語の汎用システム文言が暗黙に挿入されます。日本語専用アシスタントとしての振る舞いが不安定になる一因です。</p>
+
+<h3>2.2 「会話コンテキストが効かない」の原因： 追質問をそのままWeb検索に投げている</h3>
+<p>これが最大の<strong>構造的問題</strong>です。</p>
+<p class="code-caption">src/main.py（140〜151行）</p>
+<pre><code># --- Web search (non-fatal: degrade to no-context prompt) ---
+self.status_led.set_state(LedState.SEARCHING)
+try:
+    search_results = self.retriever.search_web(text)
+except SearchError as e:
+    logger.warning("Search failed, proceeding without context: %s", e)
+    search_results = []
+
+# --- Compose & generate (include condensed conversation history) ---
+self.status_led.set_state(LedState.THINKING)
+history_context = self.history.as_condensed_context()
+prompt = self.composer.compose_prompt(text, search_results, history_context)</code></pre>
+<p>「それはどういうこと？」「もっと詳しく」のような照応・省略を含む追質問が、そのまま <code>search_web(text)</code> に渡されます。すると：</p>
+<ol>
+  <li>SearXNG は無関係な結果を返す（「それは」では検索できない）</li>
+  <li>Reranker は「質問との関連度で並べ替える」だけなので、<strong>そもそも無関係な候補群からは救えない</strong></li>
+  <li>その無関係な結果を composer が「絶対に事実として扱いなさい」とモデルに渡す</li>
+  <li>モデルは履歴より検索結果を優先 → 文脈が破壊される</li>
+</ol>
+<p>履歴の保持自体は実装済みですが、<strong>現在の質問を自立した質問に書き換える処理（Condense-Question）がない</strong>ため、履歴が検索・Rerank・生成のどこにも活きていません。<code>future_extensions.md</code> 第4項でも「過去の対話履歴を要約して現在の質問に統合」が構想されていた部分で、現状は「プロンプトへの履歴埋め込み」までしか実装されていない状態です。</p>
+
+<h3>2.3 副次的な要因</h3>
+<ul>
+  <li><strong>Whisper の誤認識</strong>: <code>transcribe()</code> で <code>initial_prompt</code> 未使用。固有名詞を誤認識すると検索クエリごと壊れる</li>
+  <li><strong>検索不要な発話でも必ず検索</strong>: 挨拶や雑談への無関係な検索結果も「絶対的事実」として注入される</li>
+</ul>
+
+<h2 id="sec3">3. 改善提案（優先度順）</h2>
+<p>AGENTS.md の制約（生成前RAGの順序を崩さない／日本語のみ／検索失敗は非致命）に整合する範囲で設計しています。</p>
+
+<h3><span class="tag">A</span>追加遅延ゼロで効く施策（変更ごく小）</h3>
+
+<h4>A1. <code>brain.py</code> に <code>options</code> / <code>system</code> / <code>keep_alive</code> を追加</h4>
+<pre><code>json_body={
+    'model': self.ollama_model,
+    'prompt': prompt,
+    'stream': False,
+    'system': 'あなたは日本語専用の音声アシスタントです。回答はすべて日本語のみで行い、アルファベットを含めてはいけません。',
+    'keep_alive': '30m',
+    'options': {
+        'temperature': 0.3,      # 事実忠実性を優先して下げる
+        'num_ctx': 4096,
+        'num_predict': 512,      # 上限として（暴走防止。短縮目的ではない）
+        'repeat_penalty': 1.1,
+    },
+}</code></pre>
+<p><code>system</code> でテンプレート既定の英語システム文言を上書きし、日本語応答が安定します。<code>keep_alive</code> は後述の複数回呼び出し導入時のロード待ち解消に必須です。設定値は <code>config.py</code> 経由＋<code>.env.example</code> 更新のルールに従ってください。</p>
+
+<h4>A2. <code>composer.py</code> のプロンプト強化</h4>
+<ul>
+  <li>「検索結果の内容をもとに、<strong>3〜5文で具体的に説明しなさい</strong>」（文量指示）</li>
+  <li>「『それ』『さっきの』などの指示語は『これまでの会話』を参照して解釈しなさい」</li>
+  <li>「<strong>検索結果が質問と無関係な場合は、検索結果を無視して</strong>これまでの会話と一般知識で答えなさい」</li>
+</ul>
+<p>最後の一文が重要で、無関係な検索結果による文脈汚染をプロンプトレベルで緩和できます。</p>
+
+<h4>A3. Whisper <code>initial_prompt</code> に直前話題を渡す</h4>
+<p><code>listener.py</code> の1行追加レベル。誤認識由来の検索劣化を緩和します。</p>
+
+<h3><span class="tag b">B</span>LLM複数回呼び出し（生成前RAGの順序は維持）</h3>
+
+<h4>B1. 検索前クエリ書き換え（最重要の提案）</h4>
+<p>履歴が存在する場合、検索の<strong>前</strong>に LLM を1回呼び、「履歴＋最新の質問 → 単独で意味が通じる検索クエリ1文」を生成し、それを SearXNG に投げます。</p>
+<pre><code>履歴: 「太陽光発電の仕組みは？」→「…光電変換を利用して…」
+今の質問: 「それの欠点は？」
+書き換え後: 「太陽光発電の欠点」</code></pre>
+<ul>
+  <li>「それは」が具体的な名詞句に解決されるので、SearXNG と Reranker の両方が本来の精度で動くようになる</li>
+  <li>3Bモデルでも「書き換え」だけなら安定してこなす。<code>temperature 0</code>・<code>num_predict 64</code> で <strong>+5〜10秒</strong>程度</li>
+  <li>失敗時は元の質問で検索にフォールバック（「検索失敗は非致命」の既存方針と同じ扱い）</li>
+  <li>処理順序は「検索 → 構成 → 生成」のまま。クエリ生成は検索ステップの前段処理であり、生成前RAGの設計制約に抵触しません</li>
+</ul>
+
+<h4>B2. 検索要否の判定（Router）</h4>
+<p>LLM1回（はい/いいえの短答）で「この質問にWeb検索が必要か」を判定し、雑談・履歴参照のみの質問では検索自体をスキップ。ノイズ注入を根本から断ちます。スキップした分、実質的な遅延は相殺される場面もあります。</p>
+
+<h4>B3. エビデンス抽出（任意・重め）</h4>
+<p>Rerank 後のスニペットから「質問に関連する事実のみ箇条書きで抽出」を LLM にさせてから composer に渡す案もありますが、3B だと抽出漏れのリスクと <strong>+15〜30秒</strong> のコストがあるため、B1導入後に効果を見てから判断でよいと考えます。</p>
+<div class="warn">
+  なお「下書き→推敲」「生成後の自己検証」型の多段生成は、AGENTS.md の「生成後検証への設計変更はしない」に抵触し得るため今回は提案しません。生成<strong>前</strong>の多段化（B1/B2/B3）で精度を稼ぐのが、このリポジトリの制約と相性のよい方向です。
+</div>
+
+<h3><span class="tag c">C</span>コンテキストの密度向上（新ライブラリ導入）</h3>
+
+<h4>C1. 本文フェッチ（<code>trafilatura</code> 導入）——「短い回答」への最も根本的な処方</h4>
+<p>Rerank 上位1〜2件の URL から記事本文を抽出し、先頭800〜1200字をコンテキストに追加します。現状はスニペット1〜2行しか材料がないので、長く正確な回答を作る土台自体が不足しています。<code>trafilatura</code> は依存が軽くラズパイでも実用的に動作する本文抽出ライブラリです。タイムアウト3秒・失敗は非致命（スニペットのみで継続）という設計にすれば、既存のエラーポリシーとも整合します。</p>
+
+<h4>C2. 候補数・採用数の増量</h4>
+<p><code>RERANK_TOP_K</code> 3→5、<code>SEARCH_CANDIDATE_LIMIT</code> 10→20 に増量（<code>num_ctx 4096</code> と併せて）。<code>.env</code> 変更のみで試せます。</p>
+
+<h3><span class="tag d">D</span>構造改善</h3>
+
+<h4>D1. <code>/api/chat</code> への移行</h4>
+<p>履歴を文字列ではなく <code>messages</code> 配列（user/assistant ペア）で渡す方式に変更。Qwen系はチャットフォーマットで訓練されているため、多ターンの文脈解釈が大きく改善します。<code>conversation_history.py</code> に <code>as_messages()</code> を追加し、<code>brain.py</code> の POST 先を <code>/api/chat</code> に変える形です。</p>
+
+<h4>D2. モデル変更の検討</h4>
+<p>精度改善の一番単純な手段はモデル自体の更新でもあります。Pi 5（8GB）の2026年実測ベースでは：</p>
+<table>
+  <tr><th>モデル</th><th>速度（実測）</th><th>備考</th></tr>
+  <tr><td>現行: Qwen2.5 3B Q4_K_M</td><td>約8 tok/s</td><td>現状</td></tr>
+  <tr><td>LFM2.5 1.2B JP</td><td>約15 tok/s</td><td>日本語チューニング済み。速くて日本語会話向き</td></tr>
+  <tr><td>Qwen3.5 2B</td><td>約3.7 tok/s（Q8）</td><td>新世代だがPiではやや重い</td></tr>
+  <tr><td>Gemma 3 4B Q4_K_M</td><td>約3.6 tok/s</td><td>精度重視なら選択肢。「応答時間は許容」とのことなので検討余地あり</td></tr>
+</table>
+<p><code>OLLAMA_MODEL</code> を変えるだけで試せるため、A/B/C の改善後にそれでも不足なら検討、という順序が無難です。</p>
+
+<h2 id="sec4">4. 推奨ロードマップ</h2>
+<table>
+  <tr><th>順序</th><th>施策</th><th>効く症状</th><th>追加遅延</th><th>変更規模</th></tr>
+  <tr><td>1</td><td>A1 options/system 追加</td><td>短文・日本語不安定</td><td>なし</td><td><code>brain.py</code>＋<code>config.py</code></td></tr>
+  <tr><td>2</td><td>A2 プロンプト強化</td><td>短文・照応解釈</td><td>なし</td><td><code>composer.py</code> のみ</td></tr>
+  <tr><td>3</td><td><strong>B1 クエリ書き換え</strong></td><td>コンテキスト保持（根本）</td><td>+5〜10秒</td><td>小〜中（新規メソッド＋テスト）</td></tr>
+  <tr><td>4</td><td>C1 本文フェッチ</td><td>短文・根拠の薄さ（根本）</td><td>+1〜3秒</td><td><code>retriever.py</code>＋新依存</td></tr>
+  <tr><td>5</td><td>D1 <code>/api/chat</code> 移行</td><td>コンテキスト保持</td><td>なし</td><td><code>brain</code>/<code>conversation_history</code>/<code>composer</code></td></tr>
+  <tr><td>6</td><td>B2 Router・C2・A3</td><td>精度の底上げ</td><td>状況次第</td><td>小〜中</td></tr>
+  <tr><td>7</td><td>B3・D2 モデル変更</td><td>さらなる精度</td><td>大きめ／変動</td><td>要検証</td></tr>
+</table>
+<p>遅延の目安： Qwen2.5 3B は Pi 5 で約8 tok/s なので、現行でも300トークンの回答生成に約40秒かかっているはずです。順序1〜4まで入れても追加は10秒強に収まり、「多少応答時間がかかってもいい」との要件には十分収まると見ています。</p>
+<div class="note">
+  実装に進む場合の注意点（AGENTS.md 準拠）： 新規の LLM 呼び出しはすべて <code>pytest-mock</code> でモック化、新モジュールには対応する <code>tests/test_*.py</code> を追加、設定追加時は <code>.env.example</code> を更新、変更は feature ブランチ＋PR で。
+</div>
+
+<footer>
+  本ドキュメントは Kimi により生成されました（2026-07-29） ／ AIスマートスピーカー 現状分析と改善案
+</footer>
+
+</div>
+</body>
+</html>
