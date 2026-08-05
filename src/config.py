@@ -61,8 +61,8 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
 
 # Speaker (Piper-Plus) settings
 SPEAKER_DEVICE = os.getenv("SPEAKER_DEVICE", "plughw:0,0")
-PIPER_MODEL_PATH = os.getenv("PIPER_MODEL_PATH", "./models/tsukuyomi.onnx")
-PIPER_CONFIG_PATH = os.getenv("PIPER_CONFIG_PATH", "./models/config.json")
+PIPER_MODEL_PATH = os.getenv("PIPER_MODEL_PATH", "./models/piper/tsukuyomi.onnx")
+PIPER_CONFIG_PATH = os.getenv("PIPER_CONFIG_PATH", "./models/piper/tsukuyomi.onnx.json")
 
 # Conversation history (multi-turn dialogue) settings
 CONVERSATION_MAX_TURNS = int(os.getenv("CONVERSATION_MAX_TURNS", "3"))
@@ -74,7 +74,7 @@ STATUS_LED_PIN = int(os.getenv("STATUS_LED_PIN", "23"))
 
 # Push-to-talk (GPIO button) settings
 PUSH_TO_TALK_ENABLED = os.getenv("PUSH_TO_TALK_ENABLED", "true").lower() in ("1", "true", "yes")
-PTT_BUTTON_PIN = int(os.getenv("PTT_BUTTON_PIN", "17"))
+PTT_BUTTON_PIN = int(os.getenv("PTT_BUTTON_PIN", "24"))
 PTT_BOUNCE_TIME = float(os.getenv("PTT_BOUNCE_TIME", "0.05"))
 PTT_MIN_RECORD_SECONDS = float(os.getenv("PTT_MIN_RECORD_SECONDS", "0.5"))
 PTT_MAX_RECORD_SECONDS = float(os.getenv("PTT_MAX_RECORD_SECONDS", "30"))

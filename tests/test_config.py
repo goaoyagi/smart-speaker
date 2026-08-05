@@ -27,12 +27,12 @@ def test_default_config_values():
     assert config.OLLAMA_API_URL == "http://localhost:11434/api/generate"
     assert config.OLLAMA_MODEL == "qwen2.5:3b"
     assert config.SPEAKER_DEVICE == "plughw:0,0"
-    assert config.PIPER_MODEL_PATH == "./models/tsukuyomi.onnx"
-    assert config.PIPER_CONFIG_PATH == "./models/config.json"
+    assert config.PIPER_MODEL_PATH == "./models/piper/tsukuyomi.onnx"
+    assert config.PIPER_CONFIG_PATH == "./models/piper/tsukuyomi.onnx.json"
     assert config.STATUS_LED_ENABLED is True
     assert config.STATUS_LED_PIN == 23
     assert config.PUSH_TO_TALK_ENABLED is True
-    assert config.PTT_BUTTON_PIN == 17
+    assert config.PTT_BUTTON_PIN == 24
     assert config.PTT_BOUNCE_TIME == 0.05
     assert config.PTT_MIN_RECORD_SECONDS == 0.5
     assert config.PTT_MAX_RECORD_SECONDS == 30

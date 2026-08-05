@@ -97,6 +97,8 @@ AIエージェント（Devin など）がこのリポジトリで作業する際
 - 設定項目を追加・変更したら、**`src/config.py` / `.env.example` / `README.md` の3点を同期**する。
   既定値は `src/config.py` と `.env.example` で必ず一致させる。
   新しい設定項目には、`tests/test_config.py` に既定値の検証を追加する。
+- 既定値は**`.env` を置かなくても実機（Raspberry Pi の既定配線・既定のモデル配置）で
+  そのまま動く値**にする。プレースホルダや開発中の暫定値を残さない。
 - コミット前に必ず `python3 -m pytest tests/ -v` が全パスすることを確認する。
 - 1 PR は 1 つの目的に絞る。
 - `main` ブランチへの直接 push は禁止。変更は必ず feature ブランチを作り、プルリクエストを経由して統合する。
