@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AGENTS.md 書き換え案</title>
+<style>
+  :root {
+    --accent: #7c3aed;
+    --accent-light: #f5f3ff;
+    --before: #b91c1c;
+    --before-bg: #fef2f2;
+    --after: #15803d;
+    --after-bg: #f0fdf4;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --code-bg: #f3f4f6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Noto Sans JP", "Yu Gothic", Meiryo, sans-serif;
+    color: var(--text);
+    line-height: 1.9;
+    margin: 0;
+    background: #f9fafb;
+  }
+  .container {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 4rem;
+    background: #fff;
+    box-shadow: 0 0 24px rgba(0,0,0,.06);
+  }
+  h1 {
+    font-size: 1.7rem;
+    border-bottom: 3px solid var(--accent);
+    padding-bottom: .5rem;
+    margin-top: 0;
+  }
+  h2 {
+    font-size: 1.3rem;
+    margin-top: 2.8rem;
+    padding-left: .6rem;
+    border-left: 6px solid var(--accent);
+  }
+  .meta { color: var(--muted); font-size: .85rem; margin-bottom: 2rem; }
+  .summary {
+    background: var(--accent-light);
+    border: 1px solid #ddd6fe;
+    border-radius: 8px;
+    padding: 1rem 1.3rem;
+    margin: 1.5rem 0;
+  }
+  .summary strong { color: var(--accent); }
+  .quote {
+    border-radius: 8px;
+    padding: .8rem 1.2rem;
+    margin: 1rem 0;
+    border: 1px solid var(--border);
+  }
+  .before {
+    background: var(--before-bg);
+    border-color: #fecaca;
+  }
+  .before .tag { color: var(--before); font-weight: bold; font-size: .85rem; display: block; margin-bottom: .3rem; }
+  .after {
+    background: var(--after-bg);
+    border-color: #bbf7d0;
+  }
+  .after .tag { color: var(--after); font-weight: bold; font-size: .85rem; display: block; margin-bottom: .3rem; }
+  .priority {
+    display: inline-block;
+    border-radius: 999px;
+    font-size: .78rem;
+    font-weight: bold;
+    padding: .1rem .7rem;
+    margin-left: .5rem;
+    vertical-align: middle;
+    color: #fff;
+  }
+  .p-high { background: #dc2626; }
+  .p-mid { background: #d97706; }
+  .p-low { background: #6b7280; }
+  code {
+    background: var(--code-bg);
+    border-radius: 4px;
+    padding: .1em .35em;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: .88em;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1.2rem 0;
+    font-size: .92rem;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: .55rem .8rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--accent-light); }
+  ul { padding-left: 1.5rem; }
+  li { margin: .35rem 0; }
+  .note { color: var(--muted); font-size: .88rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>AGENTS.md 書き換え案</h1>
+<p class="meta">対象リポジトリ: smart-speaker｜「現状分析と改善案」の改善案（案1〜5）を実装する前提での AGENTS.md 見直し｜作成: 2026年7月</p>
+
+<div class="summary">
+<strong>要約</strong><br>
+改善案（特に案1〜4）を実装する場合、AGENTS.md のいくつかのルールが<strong>文言どおりに読むと改善案と矛盾</strong>し、AIエージェントが「ルール違反だ」と判断して作業を拒否したり、中途半端な実装をしたりする原因になる。
+<strong>項目1と2は実装前に必ず修正すべき</strong>（放置すると改善案の実装自体がルール違反になる）。項目3と4は該当する案を実装するタイミングで修正すればよく、項目5は任意。
+</div>
+
+<h2>1. 「生成前RAGの処理順序」の定義 <span class="priority p-high">最重要</span></h2>
+<p><strong>矛盾する改善案:</strong> 案2（検索前のクエリ書き換え）／案4（検索後の事実抽出）</p>
+<div class="quote before">
+<span class="tag">現在の文言</span>
+<strong>生成前RAG</strong> の処理順序を崩さない（検索 → プロンプト構成 → 生成）。生成後検証への設計変更はしない。
+</div>
+<p>案2（検索前にLLMでクエリ書き換え）や案4（検索後にLLMで事実抽出）は、「検索 → 構成 → 生成」の間にLLM呼び出しを挟むため、厳密に読むと順序違反に見える。このルールの本来の意図は「<strong>最終回答の生成は必ず検索の後</strong>」「<strong>生成後に検証・修正しない</strong>」のはずなので、意図が伝わる形に書き換える。</p>
+<div class="quote after">
+<span class="tag">書き換え案</span>
+<strong>生成前RAG</strong> の原則を崩さない: 最終回答の生成は、必ず検索とコンテキスト構成の<strong>後</strong>に1回だけ行う。生成後の検証・修正フローへの設計変更はしない。クエリ書き換えや事実抽出など、最終回答生成より<strong>前</strong>の補助的なLLM呼び出しは追加してよい。
+</div>
+
+<h2>2. エラー方針の粒度 <span class="priority p-high">最重要</span></h2>
+<p><strong>矛盾する改善案:</strong> 案2（クエリ書き換え）／案3（ページ本文取得）</p>
+<div class="quote before">
+<span class="tag">現在の文言</span>
+生成（<code>GenerationError</code>）の失敗は<strong>致命</strong>。
+</div>
+<p>案2のクエリ書き換えもLLM呼び出しなので、素直に実装すると失敗時に <code>GenerationError</code> が飛び、現行ルールでは致命扱いになる。しかし書き換え失敗は「元の発話でそのまま検索する」でよく、致命にすべきではない。案3のページ本文取得の失敗も「スニペットにフォールバック」で継続すべき。次のような追記が必要。</p>
+<div class="quote after">
+<span class="tag">書き換え案（追記）</span>
+<ul>
+  <li><strong>最終回答の生成</strong>（<code>GenerationError</code>）の失敗は致命。ただし、クエリ書き換え・事実抽出など<strong>補助的なLLM呼び出しの失敗は非致命</strong>とし、フォールバック（元のクエリで検索、抽出をスキップ等）で処理を続行する。</li>
+  <li>検索結果ページの<strong>本文取得の失敗は非致命</strong>。スニペットにフォールバックする。</li>
+</ul>
+</div>
+
+<h2>3. 日本語限定指示の「置き場所」の固定 <span class="priority p-mid">案1実装時に修正</span></h2>
+<p><strong>矛盾する改善案:</strong> 案1（<code>/api/chat</code> 移行・system メッセージ導入）</p>
+<div class="quote before">
+<span class="tag">現在の文言</span>
+<code>composer.py</code> のプロンプトが持つ日本語限定・アルファベット禁止の指示を維持する。
+</div>
+<p>案1で <code>/api/chat</code> に移行すると、この指示は composer.py 内の文字列から system メッセージへ移動する可能性が高く、ファイル名まで固定した現文言だと矛盾する。守りたいのは指示の<strong>存在</strong>であって場所ではない。</p>
+<div class="quote after">
+<span class="tag">書き換え案</span>
+日本語限定・アルファベット禁止の指示を、プロンプトまたは system メッセージのどこかで必ず維持する。
+</div>
+
+<h2>4. HTTPクライアントの関数名の固定 <span class="priority p-mid">案3実装時に修正</span></h2>
+<p><strong>矛盾する改善案:</strong> 案3（ページ本文＝HTMLの取得）</p>
+<div class="quote before">
+<span class="tag">現在の文言</span>
+<strong>HTTP 通信は <code>src/http_client.py</code></strong> の <code>http_get_json</code> / <code>http_post_json</code> を使う。
+</div>
+<p>案3ではHTML本文の取得が必要で、JSON専用の既存2関数では対応できない。「http_client.py に集約する」という意図を残しつつ関数を固定しない文言にする。</p>
+<div class="quote after">
+<span class="tag">書き換え案</span>
+<strong>HTTP 通信は <code>src/http_client.py</code> に集約する</strong>（既存は <code>http_get_json</code> / <code>http_post_json</code>。必要なら同ファイルに関数を追加する）。<code>requests</code> を各モジュールで直接呼ばない。
+</div>
+
+<h2>5. future_extensions.md の記述が古い <span class="priority p-low">任意</span></h2>
+<p>AGENTS.md は「<code>future_extensions.md</code> の機能は明示的な依頼がない限り着手しない」としているが、future_extensions.md に載っている5項目のうち <strong>2（ステータスLED）・4（会話履歴）・5（プッシュ・トゥ・トーク）はすでに実装済み</strong>。エージェントが「会話履歴の改善は future_extensions.md の項目だから着手禁止では？」と誤読するリスクがある。実装済み項目を future_extensions.md から削除（または「実装済み」と明記）するのが望ましい。これは AGENTS.md 本体ではなく参照先の修正。</p>
+
+<h2>変更不要なもの</h2>
+<ul>
+  <li>テスト方針（外部サービス・ハードウェアのモック必須、srcミラー構成）はどの案とも矛盾しない。案2〜4で追加するLLM呼び出しも既存の Ollama モック方針がそのまま使える。</li>
+  <li>コミット/PRルール、speaker.py・status_led.py の個別ルールも影響なし。</li>
+  <li>案5（モデル差し替え）は <code>.env</code> の変更だけなので AGENTS.md の修正は不要。</li>
+</ul>
+
+<h2>まとめ</h2>
+<table>
+  <tr><th>項目</th><th>対象ルール</th><th>矛盾する改善案</th><th>修正タイミング</th></tr>
+  <tr><td>1</td><td>生成前RAGの処理順序</td><td>案2・案4</td><td><strong>実装前に必須</strong></td></tr>
+  <tr><td>2</td><td>エラー方針（GenerationError＝致命）</td><td>案2・案3</td><td><strong>実装前に必須</strong></td></tr>
+  <tr><td>3</td><td>日本語限定指示の置き場所（composer.py 固定）</td><td>案1</td><td>案1の実装時</td></tr>
+  <tr><td>4</td><td>HTTP通信の関数名固定</td><td>案3</td><td>案3の実装時</td></tr>
+  <tr><td>5</td><td>future_extensions.md の実装済み項目</td><td>（誤読リスク）</td><td>任意</td></tr>
+</table>
+
+</div>
+</body>
+</html>
