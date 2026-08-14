@@ -5,7 +5,17 @@ Brain module - AI response generation using Ollama
 
 import logging
 
-from .config import OLLAMA_API_URL, OLLAMA_MODEL, validate_url
+from .config import (
+    OLLAMA_API_URL,
+    OLLAMA_KEEP_ALIVE,
+    OLLAMA_MODEL,
+    OLLAMA_NUM_CTX,
+    OLLAMA_NUM_PREDICT,
+    OLLAMA_REPEAT_PENALTY,
+    OLLAMA_SYSTEM_PROMPT,
+    OLLAMA_TEMPERATURE,
+    validate_url,
+)
 from .http_client import http_post_json
 from .audio_utils import log_init, log_ready
 from .exceptions import GenerationError
@@ -35,7 +45,15 @@ class Brain:
             json_body={
                 'model': self.ollama_model,
                 'prompt': prompt,
-                'stream': False
+                'stream': False,
+                'system': OLLAMA_SYSTEM_PROMPT,
+                'keep_alive': OLLAMA_KEEP_ALIVE,
+                'options': {
+                    'num_ctx': OLLAMA_NUM_CTX,
+                    'num_predict': OLLAMA_NUM_PREDICT,
+                    'temperature': OLLAMA_TEMPERATURE,
+                    'repeat_penalty': OLLAMA_REPEAT_PENALTY,
+                },
             },
             timeout=120
         )

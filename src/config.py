@@ -58,6 +58,18 @@ RERANK_TOP_K = int(os.getenv("RERANK_TOP_K", "3"))
 # Brain (Ollama) settings
 OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434/api/generate")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
+# Brain (Ollama) generation settings
+OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "8192"))
+OLLAMA_NUM_PREDICT = int(os.getenv("OLLAMA_NUM_PREDICT", "512"))
+OLLAMA_TEMPERATURE = float(os.getenv("OLLAMA_TEMPERATURE", "0.3"))
+OLLAMA_REPEAT_PENALTY = float(os.getenv("OLLAMA_REPEAT_PENALTY", "1.1"))
+OLLAMA_KEEP_ALIVE = os.getenv("OLLAMA_KEEP_ALIVE", "30m")
+OLLAMA_SYSTEM_PROMPT = os.getenv(
+    "OLLAMA_SYSTEM_PROMPT",
+    "あなたは日本語専用の音声アシスタントです。"
+    "回答はすべて日本語のみで行い、アルファベット（英語の単語や文）を含めてはいけません。"
+    "必要であればカタカナや日本語表現に翻訳して出力してください。",
+)
 
 # Speaker (Piper-Plus) settings
 SPEAKER_DEVICE = os.getenv("SPEAKER_DEVICE", "plughw:0,0")

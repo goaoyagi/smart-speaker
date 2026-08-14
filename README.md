@@ -96,6 +96,22 @@ python3 -m src.main
 python3 -m src.main
 ```
 
+### Ollama生成設定
+
+Ollamaの生成パラメータは環境変数で変更できます。既定値は次のとおりです。
+
+```bash
+OLLAMA_NUM_CTX=8192
+OLLAMA_NUM_PREDICT=512
+OLLAMA_TEMPERATURE=0.3
+OLLAMA_REPEAT_PENALTY=1.1
+# モデルをメモリに保持する時間。期間文字列（30m / 24h）または秒数（1800）で指定する
+OLLAMA_KEEP_ALIVE=30m
+```
+
+`OLLAMA_SYSTEM_PROMPT` では、回答の日本語限定・アルファベット禁止を担保するシステムプロンプトを
+変更できます。既定値は `.env.example` と `src/config.py` を参照してください。
+
 ## テスト
 
 ### ソフトウェアテスト
