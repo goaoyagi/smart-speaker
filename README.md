@@ -174,5 +174,6 @@ smart-speaker/
 - **retriever.py（Reranking）**: 標準構成として既定で有効。依存ライブラリ未導入時や処理に失敗した場合は自動的にスキップされ、検索結果をそのまま使用する
 - **status_led.py**: `gpiozero` は Raspberry Pi 上でのみ動作するため、非Pi環境では自動的に無効化される
 - **conversation_history.py**: 直近 `CONVERSATION_MAX_TURNS` 回分の問いと答えを保持し、要約してプロンプトに埋め込む。「もう一回言って」などの再復唱コマンドは、検索・生成を行わず直前の回答をそのまま発話する
+- **brain.py（Ollama生成パラメータ）**: `/api/generate` に `system`・`keep_alive`・`options` を渡す。既定は `OLLAMA_NUM_CTX=8192`、`OLLAMA_NUM_PREDICT=512`、`OLLAMA_TEMPERATURE=0.3`、`OLLAMA_REPEAT_PENALTY=1.1`、`OLLAMA_KEEP_ALIVE=30m`。`num_predict` は暴走防止の上限であり、回答を長くする施策ではない。日本語限定の指示は `OLLAMA_SYSTEM_PROMPT` で渡す
 - **push_to_talk.py**: GPIOボタンが利用できる環境では「押している間だけ録音」するプッシュ・トゥ・トークで動作する。ボタンが無い非Pi環境（`gpiozero` 不在）では自動的に無効化され、`RECORD_SECONDS` の固定秒数録音にフォールバックする。`PTT_MIN_RECORD_SECONDS` / `PTT_MAX_RECORD_SECONDS` で最小・最大録音時間を制御する
 - **テスト実行時**: 外部API（SearXNG/Ollama）にリクエストを飛ばさず、`pytest-mock` でモック化すること

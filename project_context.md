@@ -41,6 +41,12 @@
 ### retriever.py / brain.py (外部通信)
 - テスト実行時は、実際のローカルサーバー（SearXNG / Ollama）にリクエストを飛ばさず、必ず `pytest-mock` を使用してレスポンスをシミュレート（モック化）すること。
 
+### brain.py (Ollama生成)
+- `/api/generate` に `model` / `prompt` / `stream` に加えて `system` / `keep_alive` / `options` を渡す。
+- `options` の既定は `num_ctx=8192`、`num_predict=512`、`temperature=0.3`、`repeat_penalty=1.1`。`keep_alive` の既定は `30m`（30分）。
+- `num_predict` は暴走防止の上限であり、回答を長くするための設定ではない。
+- `system`（`OLLAMA_SYSTEM_PROMPT`）で日本語限定・アルファベット禁止を指示し、Qwen 既定の英語システム文言を上書きする。
+
 ### retriever.py (Reranking)
 - Reranking を標準フローの一部（既定で有効）とし、生成前RAGの処理順序（検索 → Reranking → プロンプト構成 → 生成）を崩さないこと。
 - `optimum` / `transformers` は動的インポート（使用直前に import し、`ImportError` を捕捉）すること。起動時の依存不足による失敗を避け、フォールバックできるようにする。
