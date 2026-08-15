@@ -9,7 +9,8 @@ Keeps the last N (query, answer) pairs so the assistant can:
 Uses a Sliding Window Memory (``collections.deque`` with ``maxlen``) so old
 turns are discarded automatically in O(1). ``as_condensed_context`` renders the
 retained turns into a short, prompt-friendly summary (Condense Question) with
-each answer clipped to keep the prompt length bounded.
+each answer clipped to keep the prompt length bounded. ``as_messages`` renders
+the same turns as role-tagged chat messages for ``/api/chat``.
 """
 
 from collections import deque
@@ -74,3 +75,11 @@ class ConversationHistory:
         for query, answer in self._turns:
             lines.append(f"ユーザーは「{query}」と質問し、「{self._clip(answer)}」と回答された。")
         return "\n".join(lines)
+
+    def as_messages(self):
+        """Render retained turns as role-tagged chat messages."""
+        messages = []
+        for query, answer in self._turns:
+            messages.append({"role": "user", "content": query})
+            messages.append({"role": "assistant", "content": self._clip(answer)})
+        return messages

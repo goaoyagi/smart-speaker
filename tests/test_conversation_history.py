@@ -16,6 +16,7 @@ def test_starts_empty(history):
     assert history.is_empty()
     assert history.last_answer() is None
     assert history.as_condensed_context() == ""
+    assert history.as_messages() == []
 
 
 def test_add_and_last_answer(history):
@@ -83,3 +84,19 @@ def test_condensed_context_clips_long_answer():
     assert "…" in context
     # clipped answer (10 chars) + ellipsis, far shorter than the original 50
     assert len(context) < 50
+
+
+def test_as_messages_role_order_and_clip():
+    history = ConversationHistory(max_turns=3, answer_clip=10)
+    history.add("東京の天気は？", "晴れです。")
+    history.add("詳しくは？", "あ" * 50)
+
+    messages = history.as_messages()
+
+    assert [m["role"] for m in messages] == [
+        "user", "assistant", "user", "assistant",
+    ]
+    assert messages[0]["content"] == "東京の天気は？"
+    assert messages[1]["content"] == "晴れです。"
+    assert messages[2]["content"] == "詳しくは？"
+    assert messages[3]["content"] == "あ" * 10 + "…"

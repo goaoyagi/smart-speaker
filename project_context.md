@@ -43,6 +43,9 @@
 
 ### brain.py (生成パラメータ)
 - Ollama の生成パラメータ（`OLLAMA_NUM_CTX` / `OLLAMA_NUM_PREDICT` / `OLLAMA_TEMPERATURE` / `OLLAMA_REPEAT_PENALTY` / `OLLAMA_KEEP_ALIVE`）と、日本語限定・アルファベット禁止を担保する `OLLAMA_SYSTEM_PROMPT` は `.env` で指定できるようにする。既定値は `src/config.py` に置く。
+- `/api/chat` に `messages` 配列と `keep_alive` / `options` を渡す。
+- `prompt[:10000]` の文字切り捨ては使わない。検索コンテキストは `CONTEXT_CHAR_BUDGET`（既定2000字）に収まるよう検索結果単位で後ろから落とし、messages 全体の概算トークンが `OLLAMA_NUM_CTX - OLLAMA_NUM_PREDICT` を超える場合は古い履歴ターンから落とす。system と最後の user メッセージは落とさない。
+- 文字列を渡す旧 `generate_response(prompt)` 経路は残し、`main.py` から `compose_prompt` へ切り戻せるようにする。
 
 ### retriever.py (Reranking)
 - Reranking を標準フローの一部（既定で有効）とし、生成前RAGの処理順序（検索 → Reranking → プロンプト構成 → 生成）を崩さないこと。
@@ -52,9 +55,11 @@
   オフライン（外部アクセス禁止）のテスト方針を守ること。
 
 ### composer.py (プロンプト構成)
-- 検索結果あり／なしの両分岐で、日本語限定・アルファベット禁止と「3〜5文・結論先出し」を指示する。
+- 本番経路は `compose_messages()`。フェーズ2で確定した指示は system メッセージに集約する。
+- 検索結果は `CONTEXT_CHAR_BUDGET` に収まるよう、検索結果の単位で後ろから落とす。
 - 検索結果は「質問に関係するもの」だけを事実として扱い、無関係なら使わず、使う場合は推測で補わない。
-- 指示語（「それ」「さっきの」）は会話履歴を参照して解釈する。質問はプロンプト末尾（`回答：` の直前）に置く。
+- 指示語（「それ」「さっきの」）は会話履歴を参照して解釈する。質問は最後の user メッセージ末尾に置く。
+- `compose_prompt()` は切り戻し用に残す。検索結果あり／なしの両分岐で、日本語限定・アルファベット禁止と「3〜5文・結論先出し」を指示する。
 
 ### status_led.py (ステータスLED)
 - 待機・聞き取り・検索・思考・発話・エラーの状態を、`gpiozero` の `LED` の点灯・消灯・点滅パターンで表示する。点灯パターンは `LedState` で定義する。
@@ -70,6 +75,7 @@
 ### conversation_history.py (会話コンテキストの保持)
 - Sliding Window Memory として `collections.deque`（`maxlen=CONVERSATION_MAX_TURNS`）を使い、古い履歴をO(1)で自動破棄する。
 - Condense Question として、保持している履歴を短い要約文字列に整形して `composer.py` のプロンプトへ埋め込む。プロンプト長を抑えるため、各回答は `CONVERSATION_ANSWER_CLIP` 文字で打ち切る。
+- `/api/chat` 経路では `as_messages()` で user / assistant の交互メッセージを返す。`as_condensed_context()` は `compose_prompt()` 経路の後方互換のため残す。
 - 「もう一回言って」などの再復唱コマンドを検知した場合は、検索とLLM生成を行わず直前の回答をそのまま発話する。
 - 履歴が空のときは空文字列を返し、呼び出し側が条件分岐なしに埋め込めるようにする。
 
