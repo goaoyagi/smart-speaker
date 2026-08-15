@@ -11,6 +11,7 @@ def test_normalize_replaces_units_and_ok():
     assert normalize_for_speech("OKです。") == "オーケーです。"
     assert normalize_for_speech("100gです。") == "100グラムです。"
     assert normalize_for_speech("333mです。") == "333メートルです。"
+    assert normalize_for_speech("5msです。") == "5ミリ秒です。"
 
 
 def test_normalize_replaces_known_acronyms_and_fullwidth():

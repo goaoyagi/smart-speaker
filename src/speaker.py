@@ -12,7 +12,6 @@ from piper import PiperVoice
 from .config import SPEAKER_DEVICE, PIPER_MODEL_PATH, PIPER_CONFIG_PATH
 from .audio_utils import TempWavFile, log_init, log_ready
 from .exceptions import SpeakerError
-from .speech_normalize import normalize_for_speech
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +28,6 @@ class Speaker:
 
     def speak(self, text):
         """Convert text to speech using Piper-Plus"""
-        text = normalize_for_speech(text)
         logger.info("Speaking: %s", text)
 
         with TempWavFile() as temp_file:

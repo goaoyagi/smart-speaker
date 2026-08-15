@@ -10,7 +10,7 @@
 4. **[並べ替え] retriever.py**: 日本語Reranker（Optimum/ONNX のクロスエンコーダ）で検索結果を質問との関連度順に並べ替え
 5. **[構成] composer.py**: Reranking後の検索結果（事実ソース）と質問をプロンプトに編成
 6. **[脳] brain.py**: プロンプトを Ollama（Qwen2.5:3b）に投入し、事実に基づく回答を生成
-7. **[口] speaker.py**: `piper-tts-plus` で音声合成して発話。単位や略語の英字は発話前に日本語読みへ正規化する
+7. **[口] speaker.py**: `piper-tts-plus` で音声合成して発話
 8. **[視覚] status_led.py**: GPIO接続のLEDで、待機・聞き取り・検索・思考・発話・エラーを表示
 9. **[操作] push_to_talk.py**: GPIO接続のボタンを押している間だけ録音するプッシュ・トゥ・トーク
 10. **[記憶] conversation_history.py**: 直近N回の問いと答えを保持し、再復唱と文脈を踏まえた深掘り質問に対応

@@ -53,8 +53,8 @@ def test_speak_playback_failure(speaker):
             speaker.speak("テスト音声")
 
 
-def test_speak_normalizes_latin_before_synthesis(speaker):
-    """Piper receives Japanese readings, not leftover latin units."""
+def test_speak_passes_text_directly_to_synthesizer(speaker):
+    """Speaker does not normalize; callers are responsible for normalization."""
     with patch('src.audio_utils.tempfile.mkstemp', return_value=(3, '/tmp/test.wav')), \
          patch('src.audio_utils.os.close'), \
          patch('src.speaker.wave.open'), \
@@ -62,7 +62,7 @@ def test_speak_normalizes_latin_before_synthesis(speaker):
          patch('src.audio_utils.os.path.exists', return_value=True), \
          patch('src.audio_utils.os.unlink'):
 
-        speaker.speak("367kmです。")
+        speaker.speak("367キロメートルです。")
 
     speaker.piper_model.synthesize.assert_called()
     spoken = speaker.piper_model.synthesize.call_args[0][0]

@@ -17,7 +17,7 @@ _FULLWIDTH_LATIN = str.maketrans(
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
 )
 
-# Longer keys first so "https" wins over "http" and "km" over "m".
+# Longer keys first so "https" wins over "http", "ms" over "m", "km" over "m".
 _WORD_REPLACEMENTS = (
     ("https", "エイチティーティーピーエス"),
     ("http", "エイチティーティーピー"),
@@ -29,6 +29,7 @@ _WORD_REPLACEMENTS = (
     ("km", "キロメートル"),
     ("cm", "センチメートル"),
     ("mm", "ミリメートル"),
+    ("ms", "ミリ秒"),
     ("kg", "キログラム"),
     ("mg", "ミリグラム"),
     ("hz", "ヘルツ"),
@@ -68,13 +69,17 @@ _LATIN_RUN = re.compile(r"[A-Za-z]+")
 _NUMBERED_METER = re.compile(r"(?<=\d)\s*m(?![A-Za-z])", re.IGNORECASE)
 _NUMBERED_GRAM = re.compile(r"(?<=\d)\s*g(?![A-Za-z])", re.IGNORECASE)
 
-
-def _replace_word(text, source, target):
-    pattern = re.compile(
-        rf"(?<![A-Za-z]){re.escape(source)}(?![A-Za-z])",
-        re.IGNORECASE,
+# Pre-compiled patterns for word replacements.
+_WORD_PATTERNS = tuple(
+    (
+        re.compile(
+            rf"(?<![A-Za-z]){re.escape(source)}(?![A-Za-z])",
+            re.IGNORECASE,
+        ),
+        target,
     )
-    return pattern.sub(target, text)
+    for source, target in _WORD_REPLACEMENTS
+)
 
 
 def _spell_latin_run(match):
@@ -87,8 +92,8 @@ def normalize_for_speech(text):
         return text
 
     normalized = text.translate(_FULLWIDTH_LATIN)
-    for source, target in _WORD_REPLACEMENTS:
-        normalized = _replace_word(normalized, source, target)
+    for pattern, target in _WORD_PATTERNS:
+        normalized = pattern.sub(target, normalized)
     normalized = _NUMBERED_METER.sub("メートル", normalized)
     normalized = _NUMBERED_GRAM.sub("グラム", normalized)
     normalized = _LATIN_RUN.sub(_spell_latin_run, normalized)

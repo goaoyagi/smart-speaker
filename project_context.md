@@ -38,7 +38,7 @@
 - 本家Piper（espeak-ng依存）は日本語のアクセント解析が未対応のため絶対に使用しないこと。
 - 必ず日本語特化のフォーク版である `piper-tts-plus` を使用すること。
 - 使用する音声モデルは、Hugging Face等からJVSデータセット等の日本語ONNXモデルとJSON設定ファイルを取得して利用すること。
-- 発話前に `speech_normalize.normalize_for_speech()` で単位・略語の英字を日本語読みへ置換する。
+- 発話前に `speech_normalize.normalize_for_speech()` で単位・略語の英字を日本語読みへ置換する（呼び出しは `text_turn.py` で行う）。
 
 ### retriever.py / brain.py (外部通信)
 - テスト実行時は、実際のローカルサーバー（SearXNG / Ollama）にリクエストを飛ばさず、必ず `pytest-mock` を使用してレスポンスをシミュレート（モック化）すること。
