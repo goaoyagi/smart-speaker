@@ -107,6 +107,39 @@ python3 -m src.main
 python3 -m pytest tests/ -v
 ```
 
+### 回答精度の評価
+
+SearXNG と Ollama が起動している環境で、音声を使わずにテキスト入出力だけの評価ハーネスを実行できます。基本コマンドは次のとおりです：
+
+```bash
+python3 scripts/eval.py
+```
+
+主なオプション：
+
+- `--list`: 評価ケースの一覧を表示する
+- `--only fact-01,follow-01`: 指定したケースだけ実行する
+- `--category followup`: 指定カテゴリだけ実行する
+- `--repeat 3`: 各ケースを複数回実行する
+- `--no-search`: SearXNG検索を通さずLLM単体で評価する
+- `--ask "質問"`: 評価ケースを使わず、任意の質問をその場で確認する。複数指定すると履歴をつないだ会話になる
+- `--baseline reports/eval_before.json`: ベースラインとの差分を表示する
+- `--markdown reports/eval.md`: Markdownサマリーも保存する
+
+任意の質問を1件だけ確認する例：
+
+```bash
+python3 scripts/eval.py --ask "視力を良くする方法は？"
+```
+
+複数の質問を続けて確認し、履歴の効き方を見る例：
+
+```bash
+python3 scripts/eval.py --ask "富士山の高さは？" --ask "その山はどこにある？"
+```
+
+`--ask` には期待値がないため、通常の評価ケースのような PASS/FAIL 判定は出ません。回答を確認するだけの実行ではレポートJSONを保存せず、保存したい場合だけ `--out reports/my_question.json` のように指定します。通常の評価ケースのJSONレポートは既定で `reports/` に保存されます。自動採点は、アルファベット混入、文数、キーワード、再復唱一致など機械判定できる項目だけを対象とします。回答本文の自然さや事実性など、自動判定できない品質はレポートを人が読んで判断してください。
+
 ### ハードウェアの物理動作確認
 
 既定の配線は次のとおりです。ボタンは GPIO と GND の間に接続します（内蔵プルアップを使用）。
@@ -151,7 +184,9 @@ smart-speaker/
 │   ├── exceptions.py       # ドメイン固有の例外
 │   └── audio_utils.py      # 音声・ログ共通ユーティリティ
 ├── scripts/                # 手動実行スクリプト（pytest対象外）
-│   └── button_led_test.py  # LED・ボタンの物理配線確認用
+│   ├── button_led_test.py  # LED・ボタンの物理配線確認用
+│   ├── eval.py             # 回答精度の手動評価ハーネス
+│   └── eval_cases.json     # 評価ケース定義
 └── tests/
     ├── __init__.py
     ├── conftest.py         # pytest共通フィクスチャ
@@ -167,7 +202,8 @@ smart-speaker/
     ├── test_config.py
     ├── test_http_client.py
     ├── test_audio_utils.py
-    └── test_logging_policy.py  # src/ に print() が無いことを検証
+    ├── test_logging_policy.py  # src/ に print() が無いことを検証
+    └── test_eval_harness.py    # 評価ハーネス純粋関数のテスト
 ```
 
 ## 注意点

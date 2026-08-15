@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "description": "日本語の評価ケース。時間が経つと答えが変わる質問（天気・ニュース・株価など）は、判定が不安定になるため入れない。期待キーワードは、正しい回答なら必ず含まれる語だけを指定する。文数の下限・上限は OLLAMA_SYSTEM_PROMPT の「3〜5文」方針に合わせている。",
+  "categories": {
+    "single_fact": "単発の事実質問。検索結果を使って正しく答えられるか。",
+    "followup": "2ターン目以降が指示語（それ・その川）を含む。履歴が効いているか。",
+    "repeat": "再復唱コマンド。検索も生成も通さず直前の回答を返すか。",
+    "chitchat": "検索が無意味な雑談。無関係な検索結果に引きずられないか。",
+    "unanswerable": "検索しても知り得ない質問。推測せず分からないと言えるか。",
+    "topic_switch": "話題転換。前の話題を引きずらないか。",
+    "detail": "説明を求める質問。十分な分量で答えられるか。"
+  },
+  "cases": [
+    {
+      "id": "fact-01",
+      "category": "single_fact",
+      "note": "数値を含む定番の事実質問",
+      "turns": [
+        {
+          "input": "富士山の高さは何メートルですか？",
+          "expect_any": [["3776", "3,776", "三七七六"]],
+          "min_sentences": 3,
+          "max_sentences": 6
+        }
+      ]
+    },
+    {
+      "id": "fact-02",
+      "category": "single_fact",
+      "note": "検索なしでも答えられる基本的な事実",
+      "turns": [
+        {
+          "input": "日本の首都はどこですか？",
+          "expect_keywords": ["東京"],
+          "min_sentences": 3,
+          "max_sentences": 6
+        }
+      ]
+    },
+    {
+      "id": "fact-03",
+      "category": "single_fact",
+      "note": "単位を伴う数値",
+      "turns": [
+        {
+          "input": "水は何度で沸騰しますか？",
+          "expect_any": [["100"]],
+          "min_sentences": 3,
+          "max_sentences": 6
+        }
+      ]
+    },
+    {
+      "id": "fact-04",
+      "category": "single_fact",
+      "note": "固有名詞を1つ答えさせる",
+      "turns": [
+        {
+          "input": "太陽系で一番大きい惑星は何ですか？",
+          "expect_keywords": ["木星"],
+          "min_sentences": 3,
+          "max_sentences": 6
+        }
+      ]
+    },
+    {
+      "id": "follow-01",
+      "category": "followup",
+      "note": "2ターン目の「その山」を履歴から解決できるか",
+      "turns": [
+        {
+          "input": "富士山はどこにありますか？",
+          "expect_any": [["静岡", "山梨"]],
+          "min_sentences": 3,
+          "max_sentences": 6
+        },
+        {
+          "input": "その山の高さはどれくらいですか？",
+          "expect_any": [["3776", "3,776", "三七七六"]],
+          "min_sentences": 2,
+          "max_sentences": 6
+        }
+      ]
+    },
+    {
+      "id": "follow-02",
+      "category": "followup",
+      "note": "2ターン目の「それ」を履歴から解決できるか",
+      "turns": [
+        {
+          "input": "東京タワーの高さは何メートルですか？",
+          "expect_any": [["333"]],
+          "min_sentences": 3,
+          "max_sentences": 6
+        },
+        {
+          "input": "それはいつ完成しましたか？",
+          "expect_any": [["1958", "昭和33", "昭和三十三"]],
+          "min_sentences": 2,
+          "max_sentences": 6
+        }
+      ]
+    },
+    {
+      "id": "follow-03",
+      "category": "followup",
+      "note": "3ターンにわたって話題を保持できるか",
+      "turns": [
+        {
+          "input": "日本で一番長い川は何ですか？",
+          "expect_keywords": ["信濃川"],
+          "min_sentences": 3,
+          "max_sentences": 6
+        },
+        {
+          "input": "その川は何県を流れていますか？",
+          "expect_any": [["新潟", "長野"]],
+          "min_sentences": 2,
+          "max_sentences": 6
+        },
+        {
+          "input": "長さはどれくらいですか？",
+          "expect_any": [["367", "約367", "三六七"]],
+          "min_sentences": 2,
+          "max_sentences": 6
+        }
+      ]
+    },
+    {
+      "id": "repeat-01",
+      "category": "repeat",
+      "note": "再復唱は直前の回答と完全一致すること（LLMを呼ばない経路）",
+      "turns": [
+        {
+          "input": "日本の首都はどこですか？",
+          "expect_keywords": ["東京"],
+          "min_sentences": 3,
+          "max_sentences": 6
+        },
+        {
+          "input": "もう一回言って",
+          "expect_repeat": true,
+          "min_sentences": 0
+        }
+      ]
+    },
+    {
+      "id": "chat-01",
+      "category": "chitchat",
+      "note": "挨拶。無関係な検索結果を持ち出さないこと",
+      "turns": [
+        {
+          "input": "こんにちは。今日もよろしくお願いします。",
+          "deny_keywords": ["検索結果"],
+          "min_sentences": 1
+        }
+      ]
+    },
+    {
+      "id": "chat-02",
+      "category": "chitchat",
+      "note": "お礼。無関係な検索結果を持ち出さないこと",
+      "turns": [
+        {
+          "input": "ありがとう、助かりました。",
+          "deny_keywords": ["検索結果"],
+          "min_sentences": 1
+        }
+      ]
+    },
+    {
+      "id": "unknown-01",
+      "category": "unanswerable",
+      "note": "アシスタントが知り得ない情報。推測で作らないこと",
+      "turns": [
+        {
+          "input": "私が飼っている犬の名前は何ですか？",
+          "expect_any": [
+            ["分かりません", "わかりません", "存じません", "不明", "お答えできません", "知りません"]
+          ],
+          "min_sentences": 1
+        }
+      ]
+    },
+    {
+      "id": "unknown-02",
+      "category": "unanswerable",
+      "note": "個人の予定は検索しても得られない",
+      "turns": [
+        {
+          "input": "明日の私の予定を教えてください。",
+          "expect_any": [
+            ["分かりません", "わかりません", "存じません", "不明", "お答えできません", "知りません"]
+          ],
+          "min_sentences": 1
+        }
+      ]
+    },
+    {
+      "id": "switch-01",
+      "category": "topic_switch",
+      "note": "話題転換後、前の話題を引きずらないこと",
+      "turns": [
+        {
+          "input": "富士山の高さは何メートルですか？",
+          "expect_any": [["3776", "3,776", "三七七六"]],
+          "min_sentences": 3,
+          "max_sentences": 6
+        },
+        {
+          "input": "話は変わりますが、味噌汁の作り方を教えてください。",
+          "expect_any": [["だし", "出汁", "味噌"]],
+          "deny_keywords": ["富士山"],
+          "min_sentences": 3
+        }
+      ]
+    },
+    {
+      "id": "detail-01",
+      "category": "detail",
+      "note": "説明を求める質問。分量が足りているか",
+      "turns": [
+        {
+          "input": "光合成の仕組みを分かりやすく説明してください。",
+          "expect_any": [["二酸化炭素"], ["光", "太陽"]],
+          "min_sentences": 3
+        }
+      ]
+    }
+  ]
+}

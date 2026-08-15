@@ -79,6 +79,9 @@
 - 「もう一回言って」などの再復唱コマンドを検知した場合は、検索とLLM生成を行わず直前の回答をそのまま発話する。
 - 履歴が空のときは空文字列を返し、呼び出し側が条件分岐なしに埋め込めるようにする。
 
+### 評価ハーネス
+- `scripts/eval.py` と `scripts/eval_cases.json` は、改善の前後を数値で比較するための手動評価用ハーネスである。SearXNG と Ollama に接続して実サービスを評価するため、pytest の対象にはしない。
+
 ## 4. ディレクトリ構成（srcレイアウト・ミラーテスト）
 ```text
 smart-speaker/
@@ -100,7 +103,9 @@ smart-speaker/
 │   ├── exceptions.py       # ドメイン固有の例外
 │   └── audio_utils.py      # 音声・ログ共通ユーティリティ
 ├── scripts/                # 手動実行スクリプト（pytest対象外）
-│   └── button_led_test.py
+│   ├── button_led_test.py
+│   ├── eval.py             # 回答精度の手動評価ハーネス
+│   └── eval_cases.json     # 評価ケース定義
 └── tests/
     ├── __init__.py
     ├── conftest.py         # pytest共通フィクスチャ・モック定義
@@ -116,5 +121,6 @@ smart-speaker/
     ├── test_config.py
     ├── test_http_client.py
     ├── test_audio_utils.py
-    └── test_logging_policy.py
+    ├── test_logging_policy.py
+    └── test_eval_harness.py
 ```
