@@ -85,16 +85,18 @@ def test_listen_and_respond_successful_flow(voice_assistant):
     voice_assistant.retriever.search_web.return_value = [
         {'title': '天気予報', 'content': '晴れ', 'url': 'http://example.com'}
     ]
-    voice_assistant.composer.compose_prompt.return_value = "プロンプト"
-    voice_assistant.brain.generate_response.return_value = "今日は晴れです"
+    voice_assistant.composer.compose_messages.return_value = [{"role": "user", "content": "プロンプト"}]
+    voice_assistant.brain.generate_response_messages.return_value = "今日は晴れです"
 
     voice_assistant.listen_and_respond()
 
     voice_assistant.listener.record_audio.assert_called_once()
     voice_assistant.listener.transcribe.assert_called_once_with(audio)
     voice_assistant.retriever.search_web.assert_called_once_with("今日の天気はどうですか")
-    voice_assistant.composer.compose_prompt.assert_called_once()
-    voice_assistant.brain.generate_response.assert_called_once_with("プロンプト")
+    voice_assistant.composer.compose_messages.assert_called_once()
+    voice_assistant.brain.generate_response_messages.assert_called_once_with(
+        [{"role": "user", "content": "プロンプト"}]
+    )
     voice_assistant.speaker.speak.assert_called_once_with("今日は晴れです")
     assert voice_assistant.status_led.set_state.call_args_list == [
         call(LedState.LISTENING),
@@ -111,30 +113,32 @@ def test_listen_and_respond_records_history_after_turn(voice_assistant):
     voice_assistant.listener.record_audio.return_value = audio
     voice_assistant.listener.transcribe.return_value = "今日の天気はどうですか"
     voice_assistant.retriever.search_web.return_value = []
-    voice_assistant.composer.compose_prompt.return_value = "プロンプト"
-    voice_assistant.brain.generate_response.return_value = "今日は晴れです"
+    voice_assistant.composer.compose_messages.return_value = [{"role": "user", "content": "プロンプト"}]
+    voice_assistant.brain.generate_response_messages.return_value = "今日は晴れです"
 
     voice_assistant.listen_and_respond()
 
     assert voice_assistant.history.last_answer() == "今日は晴れです"
 
 
-def test_listen_and_respond_passes_history_context_to_composer(voice_assistant):
-    """The condensed history is forwarded to compose_prompt on later turns"""
+def test_listen_and_respond_passes_history_messages_to_composer(voice_assistant):
+    """Role-tagged history is forwarded to compose_messages on later turns."""
     voice_assistant.history.add("前の質問", "前の回答")
 
     audio = np.full(16000, 0.5, dtype=np.float32)
     voice_assistant.listener.record_audio.return_value = audio
     voice_assistant.listener.transcribe.return_value = "追加の質問"
     voice_assistant.retriever.search_web.return_value = []
-    voice_assistant.composer.compose_prompt.return_value = "プロンプト"
-    voice_assistant.brain.generate_response.return_value = "回答"
+    voice_assistant.composer.compose_messages.return_value = [{"role": "user", "content": "プロンプト"}]
+    voice_assistant.brain.generate_response_messages.return_value = "回答"
 
     voice_assistant.listen_and_respond()
 
-    args = voice_assistant.composer.compose_prompt.call_args[0]
-    # history_context is the 3rd positional arg and should be non-empty
-    assert "前の質問" in args[2]
+    args = voice_assistant.composer.compose_messages.call_args[0]
+    assert args[2] == [
+        {"role": "user", "content": "前の質問"},
+        {"role": "assistant", "content": "前の回答"},
+    ]
 
 
 def test_listen_and_respond_repeat_command_respeaks_without_llm(voice_assistant):
@@ -148,7 +152,7 @@ def test_listen_and_respond_repeat_command_respeaks_without_llm(voice_assistant)
     voice_assistant.listen_and_respond()
 
     voice_assistant.retriever.search_web.assert_not_called()
-    voice_assistant.brain.generate_response.assert_not_called()
+    voice_assistant.brain.generate_response_messages.assert_not_called()
     voice_assistant.speaker.speak.assert_called_once_with("元の回答です")
 
 
@@ -160,7 +164,7 @@ def test_listen_and_respond_repeat_command_empty_history(voice_assistant):
 
     voice_assistant.listen_and_respond()
 
-    voice_assistant.brain.generate_response.assert_not_called()
+    voice_assistant.brain.generate_response_messages.assert_not_called()
     voice_assistant.speaker.speak.assert_called_once_with("まだお答えできる内容がありません。")
 
 
@@ -181,12 +185,12 @@ def test_listen_and_respond_search_failure_degrades_gracefully(voice_assistant):
     voice_assistant.listener.record_audio.return_value = audio
     voice_assistant.listener.transcribe.return_value = "テスト"
     voice_assistant.retriever.search_web.side_effect = SearchError("offline")
-    voice_assistant.composer.compose_prompt.return_value = "prompt"
-    voice_assistant.brain.generate_response.return_value = "回答"
+    voice_assistant.composer.compose_messages.return_value = [{"role": "user", "content": "prompt"}]
+    voice_assistant.brain.generate_response_messages.return_value = "回答"
 
     voice_assistant.listen_and_respond()
 
-    voice_assistant.composer.compose_prompt.assert_called_once_with("テスト", [], "")
+    voice_assistant.composer.compose_messages.assert_called_once_with("テスト", [], [])
     voice_assistant.speaker.speak.assert_called_once_with("回答")
     assert voice_assistant.status_led.set_state.call_args_list == [
         call(LedState.LISTENING),
@@ -198,13 +202,13 @@ def test_listen_and_respond_search_failure_degrades_gracefully(voice_assistant):
 
 
 def test_listen_and_respond_generation_failure(voice_assistant):
-    """Test that GenerationError propagates from generate_response"""
+    """Test that GenerationError propagates from generate_response_messages."""
     audio = np.random.uniform(-0.5, 0.5, 16000).astype(np.float32)
     voice_assistant.listener.record_audio.return_value = audio
     voice_assistant.listener.transcribe.return_value = "テスト"
     voice_assistant.retriever.search_web.return_value = []
-    voice_assistant.composer.compose_prompt.return_value = "prompt"
-    voice_assistant.brain.generate_response.side_effect = GenerationError("timeout")
+    voice_assistant.composer.compose_messages.return_value = [{"role": "user", "content": "prompt"}]
+    voice_assistant.brain.generate_response_messages.side_effect = GenerationError("timeout")
 
     with pytest.raises(GenerationError):
         voice_assistant.listen_and_respond()
@@ -276,8 +280,8 @@ def test_push_to_talk_turn_successful_flow(voice_assistant):
     voice_assistant.button.wait_for_release.return_value = True
     voice_assistant.listener.transcribe.return_value = "今日の天気は"
     voice_assistant.retriever.search_web.return_value = []
-    voice_assistant.composer.compose_prompt.return_value = "プロンプト"
-    voice_assistant.brain.generate_response.return_value = "晴れです"
+    voice_assistant.composer.compose_messages.return_value = [{"role": "user", "content": "プロンプト"}]
+    voice_assistant.brain.generate_response_messages.return_value = "晴れです"
 
     with patch('src.main.PTT_MIN_RECORD_SECONDS', 0):
         voice_assistant._push_to_talk_turn()

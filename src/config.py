@@ -56,7 +56,7 @@ RERANKER_LOCAL_PATH = os.getenv("RERANKER_LOCAL_PATH", "./models/reranker")
 RERANK_TOP_K = int(os.getenv("RERANK_TOP_K", "3"))
 
 # Brain (Ollama) settings
-OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434/api/generate")
+OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434/api/chat")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
 # Brain (Ollama) generation settings
 OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "8192"))
@@ -77,8 +77,12 @@ PIPER_MODEL_PATH = os.getenv("PIPER_MODEL_PATH", "./models/piper/tsukuyomi.onnx"
 PIPER_CONFIG_PATH = os.getenv("PIPER_CONFIG_PATH", "./models/piper/tsukuyomi.onnx.json")
 
 # Conversation history (multi-turn dialogue) settings
-CONVERSATION_MAX_TURNS = int(os.getenv("CONVERSATION_MAX_TURNS", "3"))
-CONVERSATION_ANSWER_CLIP = int(os.getenv("CONVERSATION_ANSWER_CLIP", "200"))
+CONVERSATION_MAX_TURNS = int(os.getenv("CONVERSATION_MAX_TURNS", "5"))
+CONVERSATION_ANSWER_CLIP = int(os.getenv("CONVERSATION_ANSWER_CLIP", "400"))
+
+# Message context budget settings
+CONTEXT_CHAR_BUDGET = int(os.getenv("CONTEXT_CHAR_BUDGET", "2000"))
+CHAR_TO_TOKEN_RATIO = float(os.getenv("CHAR_TO_TOKEN_RATIO", "1.0"))
 
 # Status LED (GPIO) settings
 STATUS_LED_ENABLED = os.getenv("STATUS_LED_ENABLED", "true").lower() in ("1", "true", "yes")

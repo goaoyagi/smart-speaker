@@ -6,8 +6,8 @@
 1. **[耳] listener.py**: Whisper.cpp でユーザーの音声をテキスト化。
 2. **[検索] retriever.py**: 質問をトリガーに、ローカルの「SearXNG」でWeb検索を実行。
 3. **[並べ替え] retriever.py**: 検索結果を日本語Reranker（Optimum/ONNX のクロスエンコーダ）により質問との関連度で並べ替え、上位のみを次段に渡す。
-4. **[構成] composer.py**: Reranking後の検索結果（事実ソース）と質問をプロンプトに編成。
-5. **[脳] brain.py**: プロンプトを Ollama（Qwen2.5:3b）に投入し、事実に基づく回答を生成。
+4. **[構成] composer.py**: Reranking後の検索結果（事実ソース）と質問をプロンプト／メッセージに編成。
+5. **[脳] brain.py**: メッセージを Ollama（Qwen2.5:3b）の `/api/chat` に投入し、事実に基づく回答を生成。
 6. **[口] speaker.py**: `piper-tts-plus` で音声合成して発話。
 7. **[視覚] status_led.py**: GPIO接続のLEDで、待機・聞き取り・検索・思考・発話・エラーの各状態を表示。
 8. **[操作] push_to_talk.py**: GPIO接続のボタンを押している間だけ録音するプッシュ・トゥ・トーク。
@@ -61,7 +61,7 @@
 
 ### conversation_history.py (会話コンテキストの保持)
 - Sliding Window Memory として `collections.deque`（`maxlen=CONVERSATION_MAX_TURNS`）を使い、古い履歴をO(1)で自動破棄する。
-- Condense Question として、保持している履歴を短い要約文字列に整形して `composer.py` のプロンプトへ埋め込む。プロンプト長を抑えるため、各回答は `CONVERSATION_ANSWER_CLIP` 文字で打ち切る。
+- 保持している履歴は `as_messages()` で user / assistant のメッセージ列に変換して `composer.py` の chat messages に渡す。従来の `as_condensed_context()` も残し、各回答は `CONVERSATION_ANSWER_CLIP` 文字で打ち切る。
 - 「もう一回言って」などの再復唱コマンドを検知した場合は、検索とLLM生成を行わず直前の回答をそのまま発話する。
 - 履歴が空のときは空文字列を返し、呼び出し側が条件分岐なしに埋め込めるようにする。
 

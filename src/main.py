@@ -146,13 +146,13 @@ class VoiceAssistant:
             logger.warning("Search failed, proceeding without context: %s", e)
             search_results = []
 
-        # --- Compose & generate (include condensed conversation history) ---
+        # --- Compose & generate (include role-tagged conversation history) ---
         self.status_led.set_state(LedState.THINKING)
-        history_context = self.history.as_condensed_context()
-        prompt = self.composer.compose_prompt(text, search_results, history_context)
+        history_messages = self.history.as_messages()
+        messages = self.composer.compose_messages(text, search_results, history_messages)
 
         try:
-            response = self.brain.generate_response(prompt)
+            response = self.brain.generate_response_messages(messages)
         except GenerationError as e:
             logger.error("AI generation failed: %s", e)
             self._safe_speak("申し訳ありませんが、回答を生成できませんでした。")

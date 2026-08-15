@@ -31,10 +31,18 @@ class Brain:
         log_ready("Brain")
 
     def generate_response(self, prompt):
-        """Generate response using Ollama/Qwen 2.5 with search context"""
+        """Generate a response through the legacy single-prompt interface."""
         if not isinstance(prompt, str) or not prompt.strip():
             return "申し訳ありませんが、質問が空です。"
-        prompt = prompt[:10000]
+        return self.generate_response_messages([
+            {'role': 'system', 'content': OLLAMA_SYSTEM_PROMPT},
+            {'role': 'user', 'content': prompt},
+        ])
+
+    def generate_response_messages(self, messages):
+        """Generate a response using Ollama's chat messages interface."""
+        if not isinstance(messages, list) or not messages:
+            return "申し訳ありませんが、質問が空です。"
 
         logger.info("Generating response with AI...")
 
@@ -44,9 +52,8 @@ class Brain:
             service_name="Ollama",
             json_body={
                 'model': self.ollama_model,
-                'prompt': prompt,
+                'messages': messages,
                 'stream': False,
-                'system': OLLAMA_SYSTEM_PROMPT,
                 'keep_alive': OLLAMA_KEEP_ALIVE,
                 'options': {
                     'num_ctx': OLLAMA_NUM_CTX,
@@ -58,7 +65,8 @@ class Brain:
             timeout=120
         )
 
-        answer = data.get('response', '').strip()
+        message = data.get('message', {})
+        answer = message.get('content', '').strip() if isinstance(message, dict) else ''
         if not answer:
             raise GenerationError("Ollama returned an empty response")
 

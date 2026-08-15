@@ -74,3 +74,11 @@ class ConversationHistory:
         for query, answer in self._turns:
             lines.append(f"ユーザーは「{query}」と質問し、「{self._clip(answer)}」と回答された。")
         return "\n".join(lines)
+
+    def as_messages(self):
+        """Render retained turns as role-tagged chat messages."""
+        messages = []
+        for query, answer in self._turns:
+            messages.append({"role": "user", "content": query})
+            messages.append({"role": "assistant", "content": self._clip(answer)})
+        return messages

@@ -101,6 +101,7 @@ python3 -m src.main
 Ollamaの生成パラメータは環境変数で変更できます。既定値は次のとおりです。
 
 ```bash
+OLLAMA_API_URL=http://localhost:11434/api/chat
 OLLAMA_NUM_CTX=8192
 OLLAMA_NUM_PREDICT=512
 OLLAMA_TEMPERATURE=0.3
@@ -111,6 +112,17 @@ OLLAMA_KEEP_ALIVE=30m
 
 `OLLAMA_SYSTEM_PROMPT` では、回答の日本語限定・アルファベット禁止を担保するシステムプロンプトを
 変更できます。既定値は `.env.example` と `src/config.py` を参照してください。
+
+フェーズ3でOllamaの接続先を`/api/chat`へ移行しました。既存の`.env`を使用している環境では、
+`OLLAMA_API_URL`を`http://localhost:11434/api/chat`へ書き換えてください。
+会話履歴と検索コンテキストの設定は次のとおりです。
+
+```bash
+CONVERSATION_MAX_TURNS=5
+CONVERSATION_ANSWER_CLIP=400
+CONTEXT_CHAR_BUDGET=2000
+CHAR_TO_TOKEN_RATIO=1.0
+```
 
 ## テスト
 

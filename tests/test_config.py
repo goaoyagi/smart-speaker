@@ -24,7 +24,7 @@ def test_default_config_values():
     )
     assert config.RERANKER_LOCAL_PATH == "./models/reranker"
     assert config.RERANK_TOP_K == 3
-    assert config.OLLAMA_API_URL == "http://localhost:11434/api/generate"
+    assert config.OLLAMA_API_URL == "http://localhost:11434/api/chat"
     assert config.OLLAMA_MODEL == "qwen2.5:3b"
     assert config.OLLAMA_NUM_CTX == 8192
     assert config.OLLAMA_NUM_PREDICT == 512
@@ -47,6 +47,10 @@ def test_default_config_values():
     assert config.PTT_MIN_RECORD_SECONDS == 0.5
     assert config.PTT_MAX_RECORD_SECONDS == 30
     assert config.DEBUG_AUDIO_DIR == ""
+    assert config.CONVERSATION_MAX_TURNS == 5
+    assert config.CONVERSATION_ANSWER_CLIP == 400
+    assert config.CONTEXT_CHAR_BUDGET == 2000
+    assert config.CHAR_TO_TOKEN_RATIO == 1.0
 
 
 def test_config_reads_environment(monkeypatch):

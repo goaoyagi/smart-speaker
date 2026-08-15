@@ -4,6 +4,7 @@ Tests for composer module
 """
 
 import pytest
+import src.composer as composer_module
 from src.composer import Composer
 
 
@@ -100,3 +101,95 @@ def test_compose_prompt_keeps_japanese_only_constraints(
 
     assert "日本語のみ" in prompt
     assert "アルファベット（英語の単語や文）を含め" in prompt
+
+
+def test_compose_messages_separates_system_history_and_user(composer, mock_search_results):
+    """Chat messages use the system prompt and role-tagged history."""
+    history_messages = [
+        {"role": "user", "content": "前の質問"},
+        {"role": "assistant", "content": "前の回答"},
+    ]
+
+    messages = composer.compose_messages(
+        "現在の質問", mock_search_results, history_messages
+    )
+
+    assert messages[0] == {
+        "role": "system",
+        "content": composer_module.SYSTEM_PROMPT,
+    }
+    assert messages[1:3] == history_messages
+    assert messages[-1] == {
+        "role": "user",
+        "content": (
+            "検索結果：\n"
+            "- テスト結果1: これはテストコンテンツです。\n"
+            "- テスト結果2: 別のテストコンテンツ。\n\n"
+            "質問：現在の質問"
+        ),
+    }
+    assert "回答はすべて日本語のみで行い" in messages[0]["content"]
+    assert "アルファベット（英語の単語や文）を含めてはいけません" in messages[0]["content"]
+
+
+def test_compose_messages_without_results_keeps_question_in_user_message(composer):
+    """A search failure still produces a system and user message."""
+    messages = composer.compose_messages("質問", [], [])
+
+    assert [message["role"] for message in messages] == ["system", "user"]
+    assert messages[-1]["content"] == "質問：質問"
+    assert "質問：" in messages[-1]["content"]
+
+
+def test_compose_messages_drops_search_results_by_whole_result(
+    composer, mock_search_results, monkeypatch
+):
+    """Search context is trimmed by dropping trailing result units."""
+    monkeypatch.setattr(composer_module, "CONTEXT_CHAR_BUDGET", 35)
+
+    messages = composer.compose_messages("質問", mock_search_results, [])
+
+    user_content = messages[-1]["content"]
+    assert "テスト結果1" in user_content
+    assert "テスト結果2" not in user_content
+    assert user_content.endswith("質問：質問")
+
+
+def test_compose_messages_drops_old_history_but_keeps_recent_and_user(
+    composer, monkeypatch
+):
+    """Budget overflow drops old history while preserving system and user."""
+    monkeypatch.setattr(composer_module, "SYSTEM_PROMPT", "システム")
+    monkeypatch.setattr(composer_module, "OLLAMA_NUM_CTX", 25)
+    monkeypatch.setattr(composer_module, "OLLAMA_NUM_PREDICT", 0)
+    monkeypatch.setattr(composer_module, "CHAR_TO_TOKEN_RATIO", 1.0)
+    history_messages = [
+        {"role": "user", "content": "古い質問"},
+        {"role": "assistant", "content": "古い回答"},
+        {"role": "user", "content": "新しい質問"},
+        {"role": "assistant", "content": "新しい回答"},
+    ]
+
+    messages = composer.compose_messages("最後の質問", [], history_messages)
+
+    assert messages[0] == {"role": "system", "content": "システム"}
+    assert {"role": "user", "content": "古い質問"} not in messages
+    assert {"role": "assistant", "content": "古い回答"} not in messages
+    assert messages[1:3] == history_messages[2:]
+    assert messages[-1] == {"role": "user", "content": "質問：最後の質問"}
+
+
+def test_compose_messages_keeps_required_messages_when_user_exceeds_budget(
+    composer, monkeypatch
+):
+    """An oversized final user message degrades without raising."""
+    monkeypatch.setattr(composer_module, "SYSTEM_PROMPT", "システム")
+    monkeypatch.setattr(composer_module, "OLLAMA_NUM_CTX", 1)
+    monkeypatch.setattr(composer_module, "OLLAMA_NUM_PREDICT", 0)
+
+    messages = composer.compose_messages("長い質問", [], [])
+
+    assert messages == [
+        {"role": "system", "content": "システム"},
+        {"role": "user", "content": "質問：長い質問"},
+    ]

@@ -19,14 +19,14 @@ def brain():
 
 def test_brain_initialization(brain):
     """Test that Brain initializes correctly"""
-    assert brain.ollama_api_url == "http://localhost:11434/api/generate"
+    assert brain.ollama_api_url == "http://localhost:11434/api/chat"
     assert brain.ollama_model == "qwen2.5:3b"
 
 
 def test_generate_response_success(brain):
     """Test successful AI response generation"""
     mock_response = Mock()
-    mock_response.json.return_value = {'response': 'テスト回答'}
+    mock_response.json.return_value = {'message': {'content': 'テスト回答'}}
     mock_response.raise_for_status = Mock()
 
     with patch('src.http_client.requests.post', return_value=mock_response):
@@ -35,21 +35,44 @@ def test_generate_response_success(brain):
     assert result == 'テスト回答'
 
 
+def test_generate_response_messages_success(brain):
+    """Test successful AI response generation from chat messages."""
+    messages = [
+        {'role': 'system', 'content': '日本語で答えてください。'},
+        {'role': 'user', 'content': 'テスト質問'},
+    ]
+    mock_response = Mock()
+    mock_response.json.return_value = {'message': {'content': 'テスト回答'}}
+    mock_response.raise_for_status = Mock()
+
+    with patch('src.http_client.requests.post', return_value=mock_response) as post:
+        result = brain.generate_response_messages(messages)
+
+    assert result == 'テスト回答'
+    payload = post.call_args.kwargs["json"]
+    assert payload["messages"] == messages
+    assert payload["stream"] is False
+    assert "system" not in payload
+
+
 def test_generate_response_sends_generation_parameters(brain):
     """Test that Ollama receives the configured generation parameters."""
     mock_response = Mock()
-    mock_response.json.return_value = {'response': 'テスト回答'}
+    mock_response.json.return_value = {'message': {'content': 'テスト回答'}}
     mock_response.raise_for_status = Mock()
 
     with patch('src.http_client.requests.post', return_value=mock_response) as post:
         brain.generate_response("テストプロンプト")
 
     payload = post.call_args.kwargs["json"]
-    assert payload["system"] == (
+    assert payload["messages"][0] == {
+        "role": "system",
+        "content": (
         "あなたは日本語専用の音声アシスタントです。"
         "回答はすべて日本語のみで行い、アルファベット（英語の単語や文）を含めてはいけません。"
         "必要であればカタカナや日本語表現に翻訳して出力してください。"
-    )
+        ),
+    }
     assert payload["keep_alive"] == "30m"
     assert payload["options"] == {
         "num_ctx": 8192,
@@ -79,14 +102,17 @@ def test_generate_response_uses_environment_generation_parameters(monkeypatch):
 
     try:
         mock_response = Mock()
-        mock_response.json.return_value = {'response': 'テスト回答'}
+        mock_response.json.return_value = {'message': {'content': 'テスト回答'}}
         mock_response.raise_for_status = Mock()
 
         with patch('src.http_client.requests.post', return_value=mock_response) as post:
             brain_module.Brain().generate_response("テストプロンプト")
 
         payload = post.call_args.kwargs["json"]
-        assert payload["system"] == values["OLLAMA_SYSTEM_PROMPT"]
+        assert payload["messages"][0] == {
+            "role": "system",
+            "content": values["OLLAMA_SYSTEM_PROMPT"],
+        }
         assert payload["keep_alive"] == values["OLLAMA_KEEP_ALIVE"]
         assert payload["options"] == {
             "num_ctx": 4096,
@@ -112,7 +138,7 @@ def test_generate_response_connection_error(brain):
 def test_generate_response_empty(brain):
     """Test AI response generation raises GenerationError on empty response"""
     mock_response = Mock()
-    mock_response.json.return_value = {'response': ''}
+    mock_response.json.return_value = {'message': {'content': ''}}
     mock_response.raise_for_status = Mock()
 
     with patch('src.http_client.requests.post', return_value=mock_response):

@@ -16,6 +16,7 @@ def test_starts_empty(history):
     assert history.is_empty()
     assert history.last_answer() is None
     assert history.as_condensed_context() == ""
+    assert history.as_messages() == []
 
 
 def test_add_and_last_answer(history):
@@ -83,3 +84,16 @@ def test_condensed_context_clips_long_answer():
     assert "…" in context
     # clipped answer (10 chars) + ellipsis, far shorter than the original 50
     assert len(context) < 50
+
+
+def test_messages_format_and_answer_clip():
+    history = ConversationHistory(max_turns=3, answer_clip=10)
+    history.add("質問1", "回答" * 20)
+    history.add("質問2", "回答2")
+
+    assert history.as_messages() == [
+        {"role": "user", "content": "質問1"},
+        {"role": "assistant", "content": "回答回答回答回答回答…"},
+        {"role": "user", "content": "質問2"},
+        {"role": "assistant", "content": "回答2"},
+    ]
