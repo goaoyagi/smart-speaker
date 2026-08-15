@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "description": "日本語の評価ケース。時間が経つと答えが変わる質問（天気・ニュース・株価など）は、判定が不安定になるため入れない。期待キーワードは、正しい回答なら必ず含まれる語だけを指定する。文数の下限・上限は OLLAMA_SYSTEM_PROMPT の「3〜5文」方針に合わせている。",
+  "description": "日本語の評価ケース。時間が経つと答えが変わる質問（天気・ニュース・株価など）は、判定が不安定になるため入れない。期待キーワードは、正しい回答なら必ず含まれる語だけを指定する。文数の下限・上限は、事実は1〜3文、雑談・不明は1〜2文、説明は3〜5文という発話方針に合わせている。",
   "categories": {
     "single_fact": "単発の事実質問。検索結果を使って正しく答えられるか。",
     "followup": "2ターン目以降が指示語（それ・その川）を含む。履歴が効いているか。",
@@ -19,8 +19,8 @@
         {
           "input": "富士山の高さは何メートルですか？",
           "expect_any": [["3776", "3,776", "三七七六"]],
-          "min_sentences": 3,
-          "max_sentences": 6
+          "min_sentences": 1,
+          "max_sentences": 4
         }
       ]
     },
@@ -32,8 +32,8 @@
         {
           "input": "日本の首都はどこですか？",
           "expect_keywords": ["東京"],
-          "min_sentences": 3,
-          "max_sentences": 6
+          "min_sentences": 1,
+          "max_sentences": 4
         }
       ]
     },
@@ -45,8 +45,8 @@
         {
           "input": "水は何度で沸騰しますか？",
           "expect_any": [["100"]],
-          "min_sentences": 3,
-          "max_sentences": 6
+          "min_sentences": 1,
+          "max_sentences": 5
         }
       ]
     },
@@ -58,8 +58,8 @@
         {
           "input": "太陽系で一番大きい惑星は何ですか？",
           "expect_keywords": ["木星"],
-          "min_sentences": 3,
-          "max_sentences": 6
+          "min_sentences": 1,
+          "max_sentences": 4
         }
       ]
     },
@@ -71,14 +71,14 @@
         {
           "input": "富士山はどこにありますか？",
           "expect_any": [["静岡", "山梨"]],
-          "min_sentences": 3,
-          "max_sentences": 6
+          "min_sentences": 1,
+          "max_sentences": 4
         },
         {
           "input": "その山の高さはどれくらいですか？",
           "expect_any": [["3776", "3,776", "三七七六"]],
-          "min_sentences": 2,
-          "max_sentences": 6
+          "min_sentences": 1,
+          "max_sentences": 4
         }
       ]
     },
@@ -90,14 +90,14 @@
         {
           "input": "東京タワーの高さは何メートルですか？",
           "expect_any": [["333"]],
-          "min_sentences": 3,
-          "max_sentences": 6
+          "min_sentences": 1,
+          "max_sentences": 4
         },
         {
           "input": "それはいつ完成しましたか？",
           "expect_any": [["1958", "昭和33", "昭和三十三"]],
-          "min_sentences": 2,
-          "max_sentences": 6
+          "min_sentences": 1,
+          "max_sentences": 4
         }
       ]
     },
@@ -109,20 +109,20 @@
         {
           "input": "日本で一番長い川は何ですか？",
           "expect_keywords": ["信濃川"],
-          "min_sentences": 3,
-          "max_sentences": 6
+          "min_sentences": 1,
+          "max_sentences": 4
         },
         {
           "input": "その川は何県を流れていますか？",
           "expect_any": [["新潟", "長野"]],
-          "min_sentences": 2,
-          "max_sentences": 6
+          "min_sentences": 1,
+          "max_sentences": 4
         },
         {
           "input": "長さはどれくらいですか？",
           "expect_any": [["367", "約367", "三六七"]],
-          "min_sentences": 2,
-          "max_sentences": 6
+          "min_sentences": 1,
+          "max_sentences": 4
         }
       ]
     },
@@ -134,8 +134,8 @@
         {
           "input": "日本の首都はどこですか？",
           "expect_keywords": ["東京"],
-          "min_sentences": 3,
-          "max_sentences": 6
+          "min_sentences": 1,
+          "max_sentences": 4
         },
         {
           "input": "もう一回言って",
@@ -152,7 +152,8 @@
         {
           "input": "こんにちは。今日もよろしくお願いします。",
           "deny_keywords": ["検索結果"],
-          "min_sentences": 1
+          "min_sentences": 1,
+          "max_sentences": 3
         }
       ]
     },
@@ -164,7 +165,8 @@
         {
           "input": "ありがとう、助かりました。",
           "deny_keywords": ["検索結果"],
-          "min_sentences": 1
+          "min_sentences": 1,
+          "max_sentences": 3
         }
       ]
     },
@@ -176,9 +178,11 @@
         {
           "input": "私が飼っている犬の名前は何ですか？",
           "expect_any": [
-            ["分かりません", "わかりません", "存じません", "不明", "お答えできません", "知りません"]
+            ["分かりません", "わかりません", "存じません", "不明", "お答えできません", "知りません", "わかりかねます", "把握していません"]
           ],
-          "min_sentences": 1
+          "deny_keywords": ["検索結果"],
+          "min_sentences": 1,
+          "max_sentences": 3
         }
       ]
     },
@@ -190,9 +194,11 @@
         {
           "input": "明日の私の予定を教えてください。",
           "expect_any": [
-            ["分かりません", "わかりません", "存じません", "不明", "お答えできません", "知りません"]
+            ["分かりません", "わかりません", "存じません", "不明", "お答えできません", "知りません", "わかりかねます", "把握していません"]
           ],
-          "min_sentences": 1
+          "deny_keywords": ["検索結果"],
+          "min_sentences": 1,
+          "max_sentences": 3
         }
       ]
     },
@@ -204,14 +210,15 @@
         {
           "input": "富士山の高さは何メートルですか？",
           "expect_any": [["3776", "3,776", "三七七六"]],
-          "min_sentences": 3,
-          "max_sentences": 6
+          "min_sentences": 1,
+          "max_sentences": 4
         },
         {
           "input": "話は変わりますが、味噌汁の作り方を教えてください。",
           "expect_any": [["だし", "出汁", "味噌"]],
           "deny_keywords": ["富士山"],
-          "min_sentences": 3
+          "min_sentences": 3,
+          "max_sentences": 8
         }
       ]
     },
@@ -223,7 +230,8 @@
         {
           "input": "光合成の仕組みを分かりやすく説明してください。",
           "expect_any": [["二酸化炭素"], ["光", "太陽"]],
-          "min_sentences": 3
+          "min_sentences": 3,
+          "max_sentences": 8
         }
       ]
     }

@@ -5,14 +5,15 @@
 ## アーキテクチャ
 
 1. **[耳] listener.py**: Whisper.cpp でユーザーの音声をテキスト化
-2. **[検索] retriever.py**: 質問をトリガーに、ローカルの「SearXNG」でWeb検索を実行
-3. **[並べ替え] retriever.py**: 日本語Reranker（Optimum/ONNX のクロスエンコーダ）で検索結果を質問との関連度順に並べ替え
-4. **[構成] composer.py**: Reranking後の検索結果（事実ソース）と質問をプロンプトに編成
-5. **[脳] brain.py**: プロンプトを Ollama（Qwen2.5:3b）に投入し、事実に基づく回答を生成
-6. **[口] speaker.py**: `piper-tts-plus` で音声合成して発話
-7. **[視覚] status_led.py**: GPIO接続のLEDで、待機・聞き取り・検索・思考・発話・エラーを表示
-8. **[操作] push_to_talk.py**: GPIO接続のボタンを押している間だけ録音するプッシュ・トゥ・トーク
-9. **[記憶] conversation_history.py**: 直近N回の問いと答えを保持し、再復唱と文脈を踏まえた深掘り質問に対応
+2. **[検索準備] query_prep.py**: 検索要否判定と、指示語を含む続き質問のクエリ書き換え（生成前の補助LLM呼び出し。失敗時は元の質問で検索）
+3. **[検索] retriever.py**: 質問をトリガーに、ローカルの「SearXNG」でWeb検索を実行（不要ならスキップ）
+4. **[並べ替え] retriever.py**: 日本語Reranker（Optimum/ONNX のクロスエンコーダ）で検索結果を質問との関連度順に並べ替え
+5. **[構成] composer.py**: Reranking後の検索結果（事実ソース）と質問をプロンプトに編成
+6. **[脳] brain.py**: プロンプトを Ollama（Qwen2.5:3b）に投入し、事実に基づく回答を生成
+7. **[口] speaker.py**: `piper-tts-plus` で音声合成して発話。単位や略語の英字は発話前に日本語読みへ正規化する
+8. **[視覚] status_led.py**: GPIO接続のLEDで、待機・聞き取り・検索・思考・発話・エラーを表示
+9. **[操作] push_to_talk.py**: GPIO接続のボタンを押している間だけ録音するプッシュ・トゥ・トーク
+10. **[記憶] conversation_history.py**: 直近N回の問いと答えを保持し、再復唱と文脈を踏まえた深掘り質問に対応
 
 ## 必要依存ライブラリ
 
@@ -174,6 +175,9 @@ smart-speaker/
 │   ├── listener.py         # Whisper音声認識
 │   ├── retriever.py        # SearXNG Web検索
 │   ├── composer.py         # RAGプロンプト構成
+│   ├── query_prep.py       # 検索要否判定・クエリ書き換え
+│   ├── text_turn.py        # テキスト入出力の1ターン（main / eval 共用）
+│   ├── speech_normalize.py # 発話前の単位・略語の日本語読み化
 │   ├── brain.py            # Ollama AI生成
 │   ├── speaker.py          # Piper-Plus TTS
 │   ├── status_led.py       # GPIO ステータスLED制御
@@ -194,6 +198,9 @@ smart-speaker/
     ├── test_listener.py
     ├── test_retriever.py
     ├── test_composer.py
+    ├── test_query_prep.py
+    ├── test_text_turn.py
+    ├── test_speech_normalize.py
     ├── test_brain.py
     ├── test_speaker.py
     ├── test_status_led.py
@@ -211,7 +218,9 @@ smart-speaker/
 - **speaker.py**: 本家Piper（espeak-ng依存）は日本語のアクセント解析が未対応のため、必ず `piper-tts-plus` を使用すること
 - **retriever.py（Reranking）**: 標準構成として既定で有効。依存ライブラリ未導入時や処理に失敗した場合は自動的にスキップされ、検索結果をそのまま使用する
 - **status_led.py**: `gpiozero` は Raspberry Pi 上でのみ動作するため、非Pi環境では自動的に無効化される
-- **composer.py**: 本番経路は `compose_messages()`。日本語限定・アルファベット禁止と「3〜5文・結論先出し」は system メッセージに集約する。検索結果は質問に関係するものだけを事実として扱い、無関係なら使わず、使う場合は推測で補わない。`compose_prompt()` は切り戻し用に残す
+- **composer.py**: 本番経路は `compose_messages()`。日本語限定と、質問タイプに合わせた文数（事実は1〜3文、説明は3〜5文、結論先出し）は system メッセージに集約する。検索結果は質問に関係するものだけを事実として扱い、無関係なら使わず、使う場合は推測で補わない。発話に「検索結果」とは言わない。`compose_prompt()` は切り戻し用に残す
+- **query_prep.py**: 最終回答の前に、検索要否と検索クエリ書き換えを1回の補助LLM呼び出しで行う。失敗時は元の質問で検索する。結果は発話しない
+- **speech_normalize.py**: 単位や略語の英字を、Piper 向けの日本語読みに機械的に置換する。生成後の LLM 推敲ではない
 - **conversation_history.py**: 直近 `CONVERSATION_MAX_TURNS` 回分の問いと答えを保持する。`/api/chat` 経路では `as_messages()` で user / assistant の交互メッセージを渡す。「もう一回言って」などの再復唱コマンドは、検索・生成を行わず直前の回答をそのまま発話する
 - **push_to_talk.py**: GPIOボタンが利用できる環境では「押している間だけ録音」するプッシュ・トゥ・トークで動作する。ボタンが無い非Pi環境（`gpiozero` 不在）では自動的に無効化され、`RECORD_SECONDS` の固定秒数録音にフォールバックする。`PTT_MIN_RECORD_SECONDS` / `PTT_MAX_RECORD_SECONDS` で最小・最大録音時間を制御する
 - **テスト実行時**: 外部API（SearXNG/Ollama）にリクエストを飛ばさず、`pytest-mock` でモック化すること

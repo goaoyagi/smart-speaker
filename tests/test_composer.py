@@ -65,8 +65,11 @@ def test_compose_prompt_keeps_japanese_only_instruction(composer, mock_search_re
     for prompt in (with_results, without_results):
         assert "日本語のみ" in prompt
         assert "アルファベット" in prompt
+        assert "1文で足りれば" in prompt
+        assert "分かりません" in prompt
         assert "3〜5文" in prompt
         assert "結論を先に" in prompt
+        assert "話題を変え" in prompt
         assert "それ" in prompt
         assert "さっきの" in prompt
         assert prompt.rstrip().endswith("回答：")
@@ -100,6 +103,7 @@ def test_compose_prompt_structure_history_and_search_combinations(composer, mock
         assert "では大阪は？" in prompt
         assert "日本語のみ" in prompt
         assert "アルファベット" in prompt
+        assert "1文で足りれば" in prompt
         assert "3〜5文" in prompt
         assert prompt.rstrip().endswith("回答：")
 
@@ -121,10 +125,13 @@ def test_compose_messages_puts_instructions_in_system(composer, mock_search_resu
     system = messages[0]["content"]
     assert "日本語のみ" in system
     assert "アルファベット" in system
+    assert "1文で足りれば" in system
+    assert "分かりません" in system
     assert "3〜5文" in system
     assert "結論を先に" in system
     assert "それ" in system
     assert "さっきの" in system
+    assert "話題を変え" in system
     assert "無関係" in system
     assert "推測で補って" in system
 

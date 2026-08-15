@@ -2,17 +2,17 @@
 """
 評価ハーネス - 回答精度と応答時間を、音声を通さずテキスト入出力だけで測る。
 
-マイク・スピーカー・GPIO には依存せず、本番と同じ Retriever（SearXNG +
-Reranking）→ Composer（`compose_messages`）→ Brain（Ollama `/api/chat`）を
+マイク・スピーカー・GPIO には依存せず、本番と同じ ``run_text_turn``
+（検索要否判定・クエリ書き換え → 検索 → 構成 → 生成 → 発話正規化）を
 実行する。会話履歴も本番と同じ ConversationHistory で保持するため、
 マルチターンの指示語解決や再復唱コマンドも評価できる。
 
 評価は主観を混ぜず、機械的に判定できる項目だけを自動採点する。
-- 日本語限定（アルファベット混入がないか）
+- 日本語限定（発話正規化後にアルファベットが残っていないか）
 - 期待キーワードの含有 / 禁止キーワードの非含有
-- 文数（「3〜5文で答える」方針を満たしているか）
+- 文数（質問タイプに合わせた下限・上限）
 - 再復唱コマンドが直前の回答をそのまま返しているか
-- 応答時間（検索 / 生成 / 合計）と回答文字数
+- 応答時間（準備 / 検索 / 生成 / 合計）と回答文字数
 - degrade（検索失敗・Reranking 失敗など）の warning 発生
 
 回答本文はレポートに全文残すので、自動採点で拾えない品質は人が読んで判断する。
@@ -52,8 +52,10 @@ from src import config  # noqa: E402
 from src.brain import Brain  # noqa: E402
 from src.composer import Composer  # noqa: E402
 from src.conversation_history import ConversationHistory  # noqa: E402
-from src.exceptions import GenerationError, SearchError  # noqa: E402
+from src.exceptions import GenerationError  # noqa: E402
+from src.query_prep import QueryPrep  # noqa: E402
 from src.retriever import Retriever  # noqa: E402
+from src.text_turn import run_text_turn  # noqa: E402
 
 DEFAULT_CASES_PATH = PROJECT_ROOT / "scripts" / "eval_cases.json"
 DEFAULT_REPORT_DIR = PROJECT_ROOT / "reports"
@@ -74,6 +76,9 @@ _CONFIG_KEYS = (
     "OLLAMA_REPEAT_PENALTY",
     "OLLAMA_KEEP_ALIVE",
     "OLLAMA_SYSTEM_PROMPT",
+    "OLLAMA_AUX_NUM_PREDICT",
+    "OLLAMA_AUX_TEMPERATURE",
+    "QUERY_PREP_ENABLED",
     "CONTEXT_CHAR_BUDGET",
     "CHAR_TO_TOKEN_RATIO",
     "SEARXNG_URL",
@@ -185,6 +190,7 @@ def summarize(turn_results):
         "answer_chars": _stats([turn["answer_chars"] for turn in completed]),
         "sentences": _stats([turn["sentences"] for turn in completed]),
         "search_ms": _stats([turn["search_ms"] for turn in completed]),
+        "prep_ms": _stats([turn.get("prep_ms", 0.0) for turn in completed]),
         "generate_ms": _stats([turn["generate_ms"] for turn in completed]),
         "total_ms": _stats([turn["total_ms"] for turn in completed]),
         "warnings": sum(len(turn.get("warnings", [])) for turn in turn_results),
@@ -201,7 +207,7 @@ def diff_summaries(baseline, current):
         if before is None or after is None:
             continue
         diff[key] = {"before": before, "after": after, "delta": round(after - before, 3)}
-    for key in ("answer_chars", "sentences", "generate_ms", "total_ms"):
+    for key in ("answer_chars", "sentences", "prep_ms", "generate_ms", "total_ms"):
         before = (baseline.get(key) or {}).get("median")
         after = (current.get(key) or {}).get("median")
         if before is None or after is None:
@@ -277,7 +283,7 @@ def select_cases(cases, only=None, categories=None):
 
 def run_turn(components, history, case, turn_spec, run_index, use_search, warnings):
     """1ターンを実行し、計測値と採点結果を返す。"""
-    retriever, composer, brain = components
+    retriever, composer, brain, query_prep = components
     query = turn_spec["input"]
     previous_answer = history.last_answer()
 
@@ -290,6 +296,9 @@ def run_turn(components, history, case, turn_spec, run_index, use_search, warnin
         "answer_chars": 0,
         "sentences": 0,
         "search_hits": 0,
+        "search_query": query,
+        "skipped_search": False,
+        "prep_ms": 0.0,
         "search_ms": 0.0,
         "generate_ms": 0.0,
         "total_ms": 0.0,
@@ -308,30 +317,36 @@ def run_turn(components, history, case, turn_spec, run_index, use_search, warnin
         answer = history.last_answer() or "まだお答えできる内容がありません。"
         result["path"] = "repeat"
     else:
-        search_results = []
-        if use_search and not turn_spec.get("skip_search"):
-            search_started = time.perf_counter()
-            try:
-                search_results = retriever.search_web(query)
-            except SearchError as error:
-                # 本番と同じく非致命。ただし検索なしの回答は他の実行と比較できないため、
-                # degrade として記録し、そのターンは不合格として扱う。
-                result["degraded"] = True
-                result["failures"].append(f"検索失敗のため計測が不完全: {error}")
-            result["search_ms"] = (time.perf_counter() - search_started) * 1000
-        result["search_hits"] = len(search_results)
-
-        messages = composer.compose_messages(query, search_results, history.as_messages())
-        generate_started = time.perf_counter()
         try:
-            answer = brain.generate_response(messages)
+            turn = run_text_turn(
+                query,
+                history.as_messages(),
+                retriever=retriever,
+                composer=composer,
+                brain=brain,
+                query_prep=query_prep,
+                use_search=use_search and not turn_spec.get("skip_search"),
+            )
         except GenerationError as error:
-            result["generate_ms"] = (time.perf_counter() - generate_started) * 1000
             result["total_ms"] = (time.perf_counter() - started) * 1000
             result["failures"].append(f"生成失敗: {error}")
             result["warnings"] = warnings.drain()
             return result
-        result["generate_ms"] = (time.perf_counter() - generate_started) * 1000
+
+        answer = turn["answer"]
+        result["search_hits"] = len(turn["search_results"])
+        result["search_query"] = turn["search_query"]
+        result["skipped_search"] = turn["skipped_search"]
+        result["prep_ms"] = turn["prep_ms"]
+        result["search_ms"] = turn["search_ms"]
+        result["generate_ms"] = turn["generate_ms"]
+        if turn["degraded"]:
+            # 本番と同じく非致命。ただし検索なしの回答は他の実行と比較できないため、
+            # degrade として記録し、そのターンは不合格として扱う。
+            result["degraded"] = True
+            result["failures"].append(
+                f"検索失敗のため計測が不完全: {turn['degrade_reason']}"
+            )
 
     result["total_ms"] = (time.perf_counter() - started) * 1000
     result["answer"] = answer
@@ -377,7 +392,9 @@ def print_turn(result, adhoc=False):
     print(
         "  "
         f"{result['answer_chars']}文字 / {result['sentences']}文 / "
-        f"検索{result['search_hits']}件 / "
+        f"検索{result['search_hits']}件"
+        f"{'（スキップ）' if result.get('skipped_search') else ''} / "
+        f"準備{result.get('prep_ms', 0.0):.0f}ms + "
         f"検索{result['search_ms']:.0f}ms + 生成{result['generate_ms']:.0f}ms "
         f"= 合計{result['total_ms']:.0f}ms"
     )
@@ -410,6 +427,7 @@ def print_summary(summary, adhoc=False):
     for key, label in (
         ("answer_chars", "回答文字数"),
         ("sentences", "文数"),
+        ("prep_ms", "準備(ms)"),
         ("search_ms", "検索(ms)"),
         ("generate_ms", "生成(ms)"),
         ("total_ms", "合計(ms)"),
@@ -462,6 +480,7 @@ def render_markdown(report):
     for key, label in (
         ("answer_chars", "回答文字数"),
         ("sentences", "文数"),
+        ("prep_ms", "準備(ms)"),
         ("search_ms", "検索(ms)"),
         ("generate_ms", "生成(ms)"),
         ("total_ms", "合計(ms)"),
@@ -538,7 +557,8 @@ def main(argv=None):
     warnings = WarningCollector()
     logging.getLogger().addHandler(warnings)
 
-    components = (Retriever(), Composer(), Brain())
+    brain = Brain()
+    components = (Retriever(), Composer(), brain, QueryPrep(brain))
     use_search = not args.no_search
 
     started_at = datetime.now(timezone.utc)

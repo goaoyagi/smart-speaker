@@ -209,6 +209,17 @@ def test_select_cases_rejects_unknown_id():
         eval_harness.select_cases([{"id": "fact-01"}], only="missing")
 
 
+def test_load_cases_uses_short_fact_sentence_bounds():
+    cases = eval_harness.load_cases(CASES_PATH)
+    by_id = {case["id"]: case for case in cases}
+    fact = by_id["fact-04"]["turns"][0]
+    assert fact["min_sentences"] == 1
+    assert fact["max_sentences"] == 4
+    unknown = by_id["unknown-01"]["turns"][0]
+    assert "分かりません" in unknown["expect_any"][0]
+    assert "検索結果" in unknown["deny_keywords"]
+
+
 def test_load_cases_contains_unique_ids_and_turns():
     cases = eval_harness.load_cases(CASES_PATH)
     raw_cases = json.loads(CASES_PATH.read_text(encoding="utf-8"))["cases"]
