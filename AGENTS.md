@@ -91,6 +91,8 @@ pytest で自動実行しない、手動実行のスクリプトを置く。テ�
 - **speaker.py**: 本家 Piper（espeak-ng 依存）は使わない。必ず日本語特化 fork の
   `piper-tts-plus` を使うこと（音声モデルは日本語 ONNX + JSON 設定）。
 - **retriever.py / brain.py**: 外部 API 通信部。テストでは必ずモック化する。
+- **brain.py**: `/api/chat` に `messages` / `keep_alive` / `options`（`num_ctx` / `num_predict` / `temperature` / `repeat_penalty`）を渡す。日本語限定の指示は system メッセージ（`OLLAMA_SYSTEM_PROMPT` / `composer.SYSTEM_PROMPT`）で維持する。設定は `src/config.py` 経由。
+- **composer.py**: 日本語限定・アルファベット禁止を維持する。回答は3〜5文・結論先出し。検索結果は関係するものだけを事実とし、無関係なら使わず、使う場合は推測で補わない。
 - **status_led.py**: 非 Pi 環境や GPIO 未接続時に `gpiozero` を自動無効化する設計を壊さない
   （import 失敗・実行時失敗を握りつぶして処理を継続する）。
 - **push_to_talk.py**: 同じく `gpiozero` が使えない環境では自動無効化し、`RECORD_SECONDS` の

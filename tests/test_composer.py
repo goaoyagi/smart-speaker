@@ -53,7 +53,7 @@ def test_compose_prompt_with_history(composer, mock_search_results):
     """History context is included when provided"""
     prompt = composer.compose_prompt("では大阪は？", mock_search_results, HISTORY)
 
-    assert "これまでの会話" in prompt
+    assert "これまでの会話：" in prompt
     assert "晴れです。" in prompt
     assert "では大阪は？" in prompt
 
@@ -64,43 +64,63 @@ def test_compose_prompt_empty_history_is_backward_compatible(composer, mock_sear
     with_empty = composer.compose_prompt("質問", mock_search_results, "")
 
     assert with_default == with_empty
-    assert "これまでの会話：\n" not in with_empty
+    assert "これまでの会話：" not in with_empty
 
 
-@pytest.mark.parametrize("with_results", [False, True])
-@pytest.mark.parametrize("with_history", [False, True])
-def test_compose_prompt_preserves_structure_for_all_input_combinations(
-    composer, mock_search_results, with_results, with_history
-):
-    """Prompt sections stay ordered for history/results combinations."""
-    query = "では大阪は？"
-    history = HISTORY if with_history else ""
-    results = mock_search_results if with_results else []
+def test_compose_prompt_keeps_japanese_only_instruction(composer, mock_search_results):
+    """Japanese-only / no-alphabet wording stays in both prompt branches."""
+    with_results = composer.compose_prompt("今日の天気", mock_search_results)
+    without_results = composer.compose_prompt("今日の天気", [])
 
-    prompt = composer.compose_prompt(query, results, history)
-
-    assert prompt.endswith("回答：")
-    assert prompt.index("質問：" + query) < prompt.index("回答：")
-    assert ("これまでの会話：\n" in prompt) is with_history
-    assert ("検索結果：" in prompt) is with_results
-    if with_results:
-        assert prompt.index("検索結果：") < prompt.index("質問：" + query)
-        assert "回答にはアルファベット（英語の単語や文）を含めず" in prompt
-    else:
-        assert "日本語のみで、アルファベット（英語の単語や文）を含めずに答えなさい。" in prompt
-    if with_history:
-        assert prompt.index("これまでの会話：\n") < prompt.index("質問：" + query)
+    for prompt in (with_results, without_results):
+        assert "日本語のみ" in prompt
+        assert "アルファベット" in prompt
+        assert "3〜5文" in prompt
+        assert "結論を先に" in prompt
+        assert "それ" in prompt
+        assert "さっきの" in prompt
+        assert prompt.rstrip().endswith("回答：")
+        assert prompt.rfind("質問：今日の天気") < prompt.rfind("回答：")
 
 
-@pytest.mark.parametrize("search_results", [[], [{"title": "結果", "content": "内容"}]])
-def test_compose_prompt_keeps_japanese_only_constraints(
-    composer, search_results
-):
-    """Japanese-only and alphabet prohibition instructions remain present."""
-    prompt = composer.compose_prompt("質問", search_results)
+def test_compose_prompt_treats_only_related_results_as_facts(composer, mock_search_results):
+    """Related hits are facts; unrelated hits must not be used or padded."""
+    prompt = composer.compose_prompt("今日の天気", mock_search_results)
 
-    assert "日本語のみ" in prompt
-    assert "アルファベット（英語の単語や文）を含め" in prompt
+    assert "質問に関係するもの" in prompt
+    assert "絶対に事実" in prompt
+    assert "無関係" in prompt
+    assert "推測で補って" in prompt
+
+
+def test_compose_prompt_structure_history_and_search_combinations(composer, mock_search_results):
+    """History × search-result presence keeps the prompt structure intact."""
+    history = "ユーザーは「東京の天気は？」と質問し、「晴れです。」と回答された。"
+    with_search_history = composer.compose_prompt("では大阪は？", mock_search_results, history)
+    with_search_no_history = composer.compose_prompt("では大阪は？", mock_search_results, "")
+    no_search_history = composer.compose_prompt("では大阪は？", [], history)
+    no_search_no_history = composer.compose_prompt("では大阪は？", [], "")
+
+    for prompt in (
+        with_search_history,
+        with_search_no_history,
+        no_search_history,
+        no_search_no_history,
+    ):
+        assert "では大阪は？" in prompt
+        assert "日本語のみ" in prompt
+        assert "アルファベット" in prompt
+        assert "3〜5文" in prompt
+        assert prompt.rstrip().endswith("回答：")
+
+    assert "これまでの会話：" in with_search_history
+    assert "これまでの会話：" in no_search_history
+    assert "これまでの会話：" not in with_search_no_history
+    assert "これまでの会話：" not in no_search_no_history
+    assert "検索結果" in with_search_history
+    assert "検索結果" in with_search_no_history
+    assert "検索結果" not in no_search_history
+    assert "検索結果" not in no_search_no_history
 
 
 def test_compose_messages_separates_system_history_and_user(composer, mock_search_results):
