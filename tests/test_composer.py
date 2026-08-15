@@ -111,3 +111,60 @@ def test_compose_prompt_structure_history_and_search_combinations(composer, mock
     assert "検索結果" in with_search_no_history
     assert "検索結果" not in no_search_history
     assert "検索結果" not in no_search_no_history
+
+
+def test_compose_messages_puts_instructions_in_system(composer, mock_search_results):
+    """Phase 2 instructions live on the system message, not the last user turn."""
+    messages = composer.compose_messages("今日の天気", mock_search_results, [])
+
+    assert messages[0]["role"] == "system"
+    system = messages[0]["content"]
+    assert "日本語のみ" in system
+    assert "アルファベット" in system
+    assert "3〜5文" in system
+    assert "結論を先に" in system
+    assert "それ" in system
+    assert "さっきの" in system
+    assert "無関係" in system
+    assert "推測で補って" in system
+
+    last = messages[-1]
+    assert last["role"] == "user"
+    assert last["content"].startswith("検索結果：")
+    assert last["content"].endswith("質問：今日の天気")
+
+
+def test_compose_messages_without_results_omits_search_block(composer):
+    messages = composer.compose_messages("今日の天気", [], [])
+    assert messages[-1]["content"] == "質問：今日の天気"
+    assert "検索結果" not in messages[-1]["content"]
+
+
+def test_compose_messages_inserts_history_between_system_and_question(composer):
+    history = [
+        {"role": "user", "content": "東京の天気は？"},
+        {"role": "assistant", "content": "晴れです。"},
+    ]
+    messages = composer.compose_messages("では大阪は？", [], history)
+
+    assert [m["role"] for m in messages] == ["system", "user", "assistant", "user"]
+    assert messages[1]["content"] == "東京の天気は？"
+    assert messages[2]["content"] == "晴れです。"
+    assert messages[-1]["content"] == "質問：では大阪は？"
+
+
+def test_compose_messages_drops_overflow_search_results_from_the_back(composer):
+    """Search hits that exceed CONTEXT_CHAR_BUDGET are dropped from the back."""
+    results = [
+        {"title": "A", "content": "あ" * 900, "url": "http://a"},
+        {"title": "B", "content": "い" * 900, "url": "http://b"},
+        {"title": "C", "content": "う" * 900, "url": "http://c"},
+    ]
+    messages = composer.compose_messages("質問", results, [])
+    user = messages[-1]["content"]
+
+    assert "- A:" in user
+    assert "- B:" in user
+    assert "- C:" not in user
+    assert "質問：質問" in user
+
