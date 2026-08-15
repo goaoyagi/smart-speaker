@@ -9,15 +9,8 @@ from .config import (
     CONTEXT_CHAR_BUDGET,
     OLLAMA_NUM_CTX,
     OLLAMA_NUM_PREDICT,
+    OLLAMA_SYSTEM_PROMPT,
 )
-
-
-SYSTEM_PROMPT = """あなたは日本語専用の音声アシスタントです。
-回答はすべて日本語のみで行い、アルファベット（英語の単語や文）を含めてはいけません。必要であればカタカナや日本語表現に翻訳してください。
-回答は3〜5文で、結論を先に述べてから補足を加える形で、具体的に説明してください。
-「それ」「さっきの」などの指示語は、これまでの会話を参照して解釈してください。
-検索結果が質問と無関係な場合は、検索結果を使わず、これまでの会話とあなたの知識で答えてください。
-検索結果を使って答える場合は、検索結果に書かれていないことを推測で補ってはいけません。"""
 
 
 class Composer:
@@ -76,7 +69,7 @@ class Composer:
         retained_history = list(history_messages or [])
         input_budget = OLLAMA_NUM_CTX - OLLAMA_NUM_PREDICT
         messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": OLLAMA_SYSTEM_PROMPT},
             *retained_history,
             user_message,
         ]
@@ -86,7 +79,7 @@ class Composer:
         ):
             del retained_history[:2]
             messages = [
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": OLLAMA_SYSTEM_PROMPT},
                 *retained_history,
                 user_message,
             ]

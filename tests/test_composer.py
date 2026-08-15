@@ -136,7 +136,7 @@ def test_compose_messages_separates_system_history_and_user(composer, mock_searc
 
     assert messages[0] == {
         "role": "system",
-        "content": composer_module.SYSTEM_PROMPT,
+        "content": composer_module.OLLAMA_SYSTEM_PROMPT,
     }
     assert messages[1:3] == history_messages
     assert messages[-1] == {
@@ -179,7 +179,7 @@ def test_compose_messages_drops_old_history_but_keeps_recent_and_user(
     composer, monkeypatch
 ):
     """Budget overflow drops old history while preserving system and user."""
-    monkeypatch.setattr(composer_module, "SYSTEM_PROMPT", "システム")
+    monkeypatch.setattr(composer_module, "OLLAMA_SYSTEM_PROMPT", "システム")
     monkeypatch.setattr(composer_module, "OLLAMA_NUM_CTX", 25)
     monkeypatch.setattr(composer_module, "OLLAMA_NUM_PREDICT", 0)
     monkeypatch.setattr(composer_module, "CHAR_TO_TOKEN_RATIO", 1.0)
@@ -203,7 +203,7 @@ def test_compose_messages_keeps_required_messages_when_user_exceeds_budget(
     composer, monkeypatch
 ):
     """An oversized final user message degrades without raising."""
-    monkeypatch.setattr(composer_module, "SYSTEM_PROMPT", "システム")
+    monkeypatch.setattr(composer_module, "OLLAMA_SYSTEM_PROMPT", "システム")
     monkeypatch.setattr(composer_module, "OLLAMA_NUM_CTX", 1)
     monkeypatch.setattr(composer_module, "OLLAMA_NUM_PREDICT", 0)
 

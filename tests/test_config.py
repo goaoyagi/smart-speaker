@@ -32,9 +32,12 @@ def test_default_config_values():
     assert config.OLLAMA_REPEAT_PENALTY == 1.1
     assert config.OLLAMA_KEEP_ALIVE == "30m"
     assert config.OLLAMA_SYSTEM_PROMPT == (
-        "あなたは日本語専用の音声アシスタントです。"
-        "回答はすべて日本語のみで行い、アルファベット（英語の単語や文）を含めてはいけません。"
-        "必要であればカタカナや日本語表現に翻訳して出力してください。"
+        "あなたは日本語専用の音声アシスタントです。\n"
+        "回答はすべて日本語のみで行い、アルファベット（英語の単語や文）を含めてはいけません。必要であればカタカナや日本語表現に翻訳してください。\n"
+        "回答は3〜5文で、結論を先に述べてから補足を加える形で、具体的に説明してください。\n"
+        "「それ」「さっきの」などの指示語は、これまでの会話を参照して解釈してください。\n"
+        "検索結果が質問と無関係な場合は、検索結果を使わず、これまでの会話とあなたの知識で答えてください。\n"
+        "検索結果を使って答える場合は、検索結果に書かれていないことを推測で補ってはいけません。"
     )
     assert config.SPEAKER_DEVICE == "plughw:0,0"
     assert config.PIPER_MODEL_PATH == "./models/piper/tsukuyomi.onnx"

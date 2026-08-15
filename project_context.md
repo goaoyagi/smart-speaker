@@ -42,7 +42,7 @@
 - テスト実行時は、実際のローカルサーバー（SearXNG / Ollama）にリクエストを飛ばさず、必ず `pytest-mock` を使用してレスポンスをシミュレート（モック化）すること。
 
 ### brain.py (生成パラメータ)
-- Ollama の生成パラメータ（`OLLAMA_NUM_CTX` / `OLLAMA_NUM_PREDICT` / `OLLAMA_TEMPERATURE` / `OLLAMA_REPEAT_PENALTY` / `OLLAMA_KEEP_ALIVE`）と、日本語限定・アルファベット禁止を担保する `OLLAMA_SYSTEM_PROMPT` は `.env` で指定できるようにする。既定値は `src/config.py` に置く。
+- Ollama の生成パラメータ（`OLLAMA_NUM_CTX` / `OLLAMA_NUM_PREDICT` / `OLLAMA_TEMPERATURE` / `OLLAMA_REPEAT_PENALTY` / `OLLAMA_KEEP_ALIVE`）と、system メッセージの正である `OLLAMA_SYSTEM_PROMPT` は `src/config.py` で一元管理する。既定の system プロンプトには日本語限定・アルファベット禁止、回答の文量・構成、指示語の解釈、検索結果の扱いまで含める。
 - `/api/chat` へ渡すコンテキストの分量は `CONTEXT_CHAR_BUDGET` / `CHAR_TO_TOKEN_RATIO` で調整できるようにする。
 
 ### retriever.py (Reranking)
