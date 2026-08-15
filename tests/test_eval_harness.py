@@ -218,3 +218,37 @@ def test_load_cases_contains_unique_ids_and_turns():
     assert all(case.get("id") and case.get("turns") for case in cases)
     ids = [case["id"] for case in cases]
     assert len(ids) == len(set(ids))
+
+
+def test_build_adhoc_case_preserves_questions_without_expectations():
+    questions = ["最初の質問です", "続きの質問です"]
+
+    case = eval_harness.build_adhoc_case(questions)
+
+    assert case["id"] == "ask"
+    assert case["category"] == "ad_hoc"
+    assert [turn["input"] for turn in case["turns"]] == questions
+    for turn in case["turns"]:
+        assert turn["min_sentences"] == 0
+        assert "expect_keywords" not in turn
+        assert "expect_any" not in turn
+        assert "deny_keywords" not in turn
+        assert "max_sentences" not in turn
+
+
+def test_build_adhoc_case_grades_short_japanese_answer_but_rejects_latin():
+    case = eval_harness.build_adhoc_case(["質問"])
+
+    passed, failures = eval_harness.grade_answer(
+        case["turns"][0],
+        "短い回答です。",
+    )
+    assert passed is True
+    assert failures == []
+
+    passed, failures = eval_harness.grade_answer(
+        case["turns"][0],
+        "AIを使います。",
+    )
+    assert passed is False
+    assert any("アルファベット混入" in failure for failure in failures)

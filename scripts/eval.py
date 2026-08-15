@@ -26,6 +26,12 @@ Reranking）→ Composer（`compose_messages`）→ Brain（Ollama `/api/chat`�
     python3 scripts/eval.py --no-search            # 検索を通さず LLM 単体を見る
     python3 scripts/eval.py --baseline reports/eval_before.json
     python3 scripts/eval.py --list
+
+任意の質問をその場で試すときは `--ask` を使う。評価ケースは読まず、
+渡した質問をその順に1つの会話として実行する（複数指定で履歴の効き方を確かめられる）:
+
+    python3 scripts/eval.py --ask "視力を良くする方法は？"
+    python3 scripts/eval.py --ask "富士山の高さは？" --ask "その山はどこにある？"
 """
 
 import argparse
@@ -228,6 +234,22 @@ class WarningCollector(logging.Handler):
         return collected
 
 
+def build_adhoc_case(questions):
+    """`--ask` で渡された質問を、1ケース（連続する会話）に組み立てる。
+
+    回答を目で確かめるためのモードなので、文数やキーワードの期待値は置かない。
+    アルファベット混入だけは常に検出する（TTS が読めないため）。
+    """
+    return {
+        "id": "ask",
+        "category": "ad_hoc",
+        "note": "--ask で渡された質問",
+        "turns": [
+            {"input": question, "min_sentences": 0} for question in questions
+        ],
+    }
+
+
 def load_cases(path):
     with open(path, encoding="utf-8") as handle:
         data = json.load(handle)
@@ -329,7 +351,7 @@ def run_turn(components, history, case, turn_spec, run_index, use_search, warnin
     return result
 
 
-def run_case(components, case, run_index, use_search, warnings, verbose=True):
+def run_case(components, case, run_index, use_search, warnings, verbose=True, adhoc=False):
     """1ケース（複数ターン）を、新しい会話履歴で実行する。"""
     history = ConversationHistory()
     turn_results = []
@@ -339,13 +361,16 @@ def run_case(components, case, run_index, use_search, warnings, verbose=True):
         )
         turn_results.append(result)
         if verbose:
-            print_turn(result)
+            print_turn(result, adhoc=adhoc)
     return turn_results
 
 
-def print_turn(result):
-    mark = "PASS" if result["passed"] else "FAIL"
-    print(f"[{mark}] {result['case_id']} run{result['run']} ({result['path']})")
+def print_turn(result, adhoc=False):
+    if adhoc:
+        print(f"[ask] run{result['run']} ({result['path']})")
+    else:
+        mark = "PASS" if result["passed"] else "FAIL"
+        print(f"[{mark}] {result['case_id']} run{result['run']} ({result['path']})")
     print(f"  Q: {result['input']}")
     answer = result["answer"]
     print(f"  A: {answer if answer is not None else '(回答なし)'}")
@@ -363,14 +388,16 @@ def print_turn(result):
     print()
 
 
-def print_summary(summary):
+def print_summary(summary, adhoc=False):
     print("=" * 60)
     print("集計")
     print("=" * 60)
-    print(
-        f"合格 {summary['passed']}/{summary['turns']} ターン "
-        f"(pass_rate {summary['pass_rate']:.1%})"
-    )
+    # --ask には期待値がないので、合格率とカテゴリ別は出さない。
+    if not adhoc:
+        print(
+            f"合格 {summary['passed']}/{summary['turns']} ターン "
+            f"(pass_rate {summary['pass_rate']:.1%})"
+        )
     if summary["errors"]:
         print(f"回答が得られなかったターン: {summary['errors']}")
     if summary["degraded"]:
@@ -392,6 +419,8 @@ def print_summary(summary):
             print(
                 f"{label}: 中央値 {stats['median']} / 平均 {stats['mean']} / 最大 {stats['max']}"
             )
+    if adhoc:
+        return
     print()
     print("カテゴリ別")
     for category, bucket in sorted(summary["by_category"].items()):
@@ -457,6 +486,12 @@ def parse_args(argv=None):
         description="回答精度と応答時間をテキスト入出力だけで評価する"
     )
     parser.add_argument("--cases", default=str(DEFAULT_CASES_PATH), help="評価ケースのJSON")
+    parser.add_argument(
+        "--ask",
+        action="append",
+        metavar="質問",
+        help="評価ケースを使わず、渡した質問の回答を確かめる（複数指定すると履歴を繋いだ連続ターンになる）",
+    )
     parser.add_argument("--only", help="実行するケースIDをカンマ区切りで指定")
     parser.add_argument("--category", help="実行するカテゴリをカンマ区切りで指定")
     parser.add_argument("--repeat", type=int, default=1, help="各ケースの実行回数")
@@ -480,7 +515,14 @@ def main(argv=None):
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
 
-    cases = load_cases(args.cases)
+    adhoc = bool(args.ask)
+    if adhoc:
+        selected = [build_adhoc_case(args.ask)]
+    else:
+        cases = load_cases(args.cases)
+
+    if args.list and adhoc:
+        raise SystemExit("--ask と --list は同時に使えません")
 
     if args.list:
         for case in cases:
@@ -490,7 +532,8 @@ def main(argv=None):
             )
         return 0
 
-    selected = select_cases(cases, args.only, args.category)
+    if not adhoc:
+        selected = select_cases(cases, args.only, args.category)
 
     warnings = WarningCollector()
     logging.getLogger().addHandler(warnings)
@@ -510,6 +553,7 @@ def main(argv=None):
                     use_search,
                     warnings,
                     verbose=not args.quiet,
+                    adhoc=adhoc,
                 )
             )
     finished_at = datetime.now(timezone.utc)
@@ -520,7 +564,8 @@ def main(argv=None):
         "started_at": started_at.isoformat(timespec="seconds"),
         "finished_at": finished_at.isoformat(timespec="seconds"),
         "duration_s": round((finished_at - started_at).total_seconds(), 1),
-        "cases_path": str(args.cases),
+        "cases_path": None if adhoc else str(args.cases),
+        "adhoc": adhoc,
         "use_search": use_search,
         "repeat": args.repeat,
         "config": config_snapshot(),
@@ -528,27 +573,33 @@ def main(argv=None):
         "summary": summary,
     }
 
-    print_summary(summary)
+    print_summary(summary, adhoc=adhoc)
 
     if args.baseline:
         with open(args.baseline, encoding="utf-8") as handle:
             baseline = json.load(handle)
         print_diff(diff_summaries(baseline.get("summary", {}), summary))
 
-    out_path = Path(args.out) if args.out else (
-        DEFAULT_REPORT_DIR / f"eval_{started_at.strftime('%Y%m%d_%H%M%S')}.json"
-    )
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(out_path, "w", encoding="utf-8") as handle:
-        json.dump(report, handle, ensure_ascii=False, indent=2)
-    print()
-    print(f"レポートを保存しました: {out_path}")
+    # --ask は手元で回答を見るためのモードなので、明示されない限りレポートを残さない。
+    if args.out or not adhoc:
+        out_path = Path(args.out) if args.out else (
+            DEFAULT_REPORT_DIR / f"eval_{started_at.strftime('%Y%m%d_%H%M%S')}.json"
+        )
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_path, "w", encoding="utf-8") as handle:
+            json.dump(report, handle, ensure_ascii=False, indent=2)
+        print()
+        print(f"レポートを保存しました: {out_path}")
 
     if args.markdown:
         markdown_path = Path(args.markdown)
         markdown_path.parent.mkdir(parents=True, exist_ok=True)
         markdown_path.write_text(render_markdown(report), encoding="utf-8")
         print(f"Markdown サマリを保存しました: {markdown_path}")
+
+    # --ask には期待値がないので、回答が得られたかだけを終了コードにする。
+    if adhoc:
+        return 0 if summary["errors"] == 0 else 1
 
     # 1ターンでも落ちたら非ゼロ終了（改善前後の比較を自動化しやすくする）。
     return 0 if summary["passed"] == summary["turns"] else 1
