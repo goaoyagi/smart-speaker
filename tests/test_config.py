@@ -33,13 +33,22 @@ def test_default_config_values():
     assert config.OLLAMA_KEEP_ALIVE == "30m"
     assert config.OLLAMA_SYSTEM_PROMPT == (
         "あなたは日本語専用の音声アシスタントです。"
-        "回答はすべて日本語のみで行い、アルファベット（英語の単語や文）を含めてはいけません。"
-        "必要であればカタカナや日本語表現に翻訳してください。"
-        "回答は3〜5文で、結論を先に述べてから補足を加える形で、具体的に説明してください。"
+        "最終的に発話する回答は日本語のみで行い、英語の単語や文、アルファベットの羅列は含めないでください。"
+        "単位や略語はカタカナか日本語で書いてください。"
+        "結論を先に述べ、文数は質問に合わせてください。"
+        "事実や数値は1文で足りれば1文で止め、多くても3文までにしてください。"
+        "挨拶やお礼は1〜2文で答えてください。"
+        "分からないことは推測せず、「分かりません」と1〜2文で答えてください。"
+        "仕組みや手順の説明だけ、3〜5文で具体的に説明してください。"
         "「それ」「さっきの」などの指示語は、これまでの会話を参照して解釈してください。"
-        "検索結果が質問と無関係な場合は、検索結果を使わず、これまでの会話とあなたの知識で答えてください。"
+        "ユーザーが話題を変えたら、前の話題には触れずに新しい質問だけに答えてください。"
+        "検索の有無や「検索結果」という言い方は発話に出さないでください。"
+        "検索結果が質問と無関係な場合は使わず、これまでの会話とあなたの知識で答えてください。"
         "検索結果を使って答える場合は、検索結果に書かれていないことを推測で補ってはいけません。"
     )
+    assert config.OLLAMA_AUX_NUM_PREDICT == 64
+    assert config.OLLAMA_AUX_TEMPERATURE == 0.0
+    assert config.QUERY_PREP_ENABLED is True
     assert config.CONTEXT_CHAR_BUDGET == 2000
     assert config.CHAR_TO_TOKEN_RATIO == 1.0
     assert config.CONVERSATION_MAX_TURNS == 5
@@ -74,6 +83,9 @@ def test_config_reads_environment(monkeypatch):
     monkeypatch.setenv("CHAR_TO_TOKEN_RATIO", "0.7")
     monkeypatch.setenv("CONVERSATION_MAX_TURNS", "4")
     monkeypatch.setenv("CONVERSATION_ANSWER_CLIP", "300")
+    monkeypatch.setenv("QUERY_PREP_ENABLED", "false")
+    monkeypatch.setenv("OLLAMA_AUX_NUM_PREDICT", "32")
+    monkeypatch.setenv("OLLAMA_AUX_TEMPERATURE", "0.2")
 
     import src.config
     importlib.reload(src.config)
@@ -84,6 +96,9 @@ def test_config_reads_environment(monkeypatch):
     assert src.config.CHAR_TO_TOKEN_RATIO == 0.7
     assert src.config.CONVERSATION_MAX_TURNS == 4
     assert src.config.CONVERSATION_ANSWER_CLIP == 300
+    assert src.config.QUERY_PREP_ENABLED is False
+    assert src.config.OLLAMA_AUX_NUM_PREDICT == 32
+    assert src.config.OLLAMA_AUX_TEMPERATURE == 0.2
     assert src.config.STATUS_LED_ENABLED is False
     assert src.config.STATUS_LED_PIN == 21
     assert src.config.PUSH_TO_TALK_ENABLED is False
@@ -110,6 +125,9 @@ def test_config_reads_environment(monkeypatch):
     monkeypatch.delenv("CHAR_TO_TOKEN_RATIO")
     monkeypatch.delenv("CONVERSATION_MAX_TURNS")
     monkeypatch.delenv("CONVERSATION_ANSWER_CLIP")
+    monkeypatch.delenv("QUERY_PREP_ENABLED")
+    monkeypatch.delenv("OLLAMA_AUX_NUM_PREDICT")
+    monkeypatch.delenv("OLLAMA_AUX_TEMPERATURE")
     importlib.reload(src.config)
 
 

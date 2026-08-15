@@ -10,14 +10,15 @@ AIエージェント（Devin など）がこのリポジトリで作業する際
 
 `project_context.md` の要件を、実装・修正時に守るためのルール。
 
-- **生成前RAG** の基本順序を崩さない（検索 → Reranking → プロンプト構成 → 生成）。
+- **生成前RAG** の基本順序を崩さない（検索要否判定・クエリ書き換え → 検索 → Reranking → プロンプト構成 → 生成）。
   - **最終回答の生成は、検索とコンテキスト構成の後に1回だけ**行う。生成した回答を LLM で
-    再度検証・修正・推敲する多段生成（生成後検証）は導入しない。
+    再度検証・修正・推敲する多段生成（生成後検証）は導入しない。発話前の単位・略語の
+    機械的な日本語読み化（`speech_normalize.py`）は LLM 推敲ではないので、この禁止の対象外。
   - 最終回答の生成より**前**の補助的な LLM 呼び出し（クエリ書き換え・検索要否判定・
     エビデンス抽出など）は追加してよい。これらは順序違反とみなさない。
 - **最終的に発話する回答**は日本語のみ（アルファベットを含めない）。TTS（`piper-tts-plus`）の
-  安定性のため、日本語限定・アルファベット禁止の指示は、プロンプトまたは system メッセージの
-  いずれかの形で必ず維持する（置き場所は `composer.py` に限定しない）。
+  安定性のため、日本語限定の指示はプロンプトまたは system メッセージのいずれかで維持し、
+  残った単位・略語は発話前に日本語読みへ正規化する（置き場所は `composer.py` に限定しない）。
 - この日本語限定の制約は**発話される出力にのみ適用**する。クエリ書き換え・検索要否判定など、
   発話されない補助的な LLM 呼び出しの出力は対象外とし、英字を含む検索クエリを返してよい。
   補助呼び出しの結果をそのまま発話してはならない。
@@ -92,8 +93,10 @@ pytest で自動実行しない、手動実行のスクリプトを置く。テ�
 - **speaker.py**: 本家 Piper（espeak-ng 依存）は使わない。必ず日本語特化 fork の
   `piper-tts-plus` を使うこと（音声モデルは日本語 ONNX + JSON 設定）。
 - **retriever.py / brain.py**: 外部 API 通信部。テストでは必ずモック化する。
-- **brain.py**: `/api/chat` に `messages` / `keep_alive` / `options`（`num_ctx` / `num_predict` / `temperature` / `repeat_penalty`）を渡す。日本語限定の指示は `OLLAMA_SYSTEM_PROMPT`（system メッセージ）で維持する。設定は `src/config.py` 経由。`prompt[:10000]` は使わず、検索コンテキストは `CONTEXT_CHAR_BUDGET`、履歴はトークン予算で削る。
-- **composer.py**: 本番は `compose_messages()`。日本語限定・アルファベット禁止を維持する。回答は3〜5文・結論先出し。検索結果は関係するものだけを事実とし、無関係なら使わず、使う場合は推測で補わない。`compose_prompt()` は切り戻し用に残す。
+- **brain.py**: `/api/chat` に `messages` / `keep_alive` / `options`（`num_ctx` / `num_predict` / `temperature` / `repeat_penalty`）を渡す。日本語限定の指示は `OLLAMA_SYSTEM_PROMPT`（system メッセージ）で維持する。補助呼び出しは `generate_auxiliary()`（`OLLAMA_AUX_NUM_PREDICT` / `OLLAMA_AUX_TEMPERATURE`）を使い、spoken system prompt は付けない。設定は `src/config.py` 経由。`prompt[:10000]` は使わず、検索コンテキストは `CONTEXT_CHAR_BUDGET`、履歴はトークン予算で削る。
+- **composer.py**: 本番は `compose_messages()`。日本語限定を維持する。文数は質問タイプに合わせる（事実は1〜3文、説明は3〜5文、結論先出し）。検索結果は関係するものだけを事実とし、無関係なら使わず、使う場合は推測で補わない。発話に「検索結果」とは言わない。`compose_prompt()` は切り戻し用に残す。
+- **query_prep.py**: 検索要否とクエリ書き換えを1回の補助LLM呼び出しで行う。失敗は非致命で元の質問へ degrade する。結果は発話しない。
+- **text_turn.py**: `main.py` と `scripts/eval.py` が同じテキストターンを使う。生成後に `normalize_for_speech()` する。
 - **status_led.py**: 非 Pi 環境や GPIO 未接続時に `gpiozero` を自動無効化する設計を壊さない
   （import 失敗・実行時失敗を握りつぶして処理を継続する）。
 - **push_to_talk.py**: 同じく `gpiozero` が使えない環境では自動無効化し、`RECORD_SECONDS` の

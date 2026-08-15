@@ -131,6 +131,27 @@ def test_generate_response_empty_messages(brain):
     assert "質問が空です" in result
 
 
+def test_generate_auxiliary_uses_shorter_options_and_caller_messages(brain):
+    """Auxiliary calls do not attach the spoken-answer system prompt."""
+    with patch('src.http_client.requests.post', return_value=_chat_response()) as post:
+        messages = [
+            {"role": "system", "content": "検索準備"},
+            {"role": "user", "content": "質問：こんにちは"},
+        ]
+        brain.generate_auxiliary(messages)
+
+    payload = post.call_args.kwargs["json"]
+    assert payload["messages"] == messages
+    assert payload["options"]["num_predict"] == 64
+    assert payload["options"]["temperature"] == 0.0
+
+
+def test_generate_auxiliary_empty_messages_raises(brain):
+    with pytest.raises(GenerationError, match="empty"):
+        brain.generate_auxiliary([])
+
+
+
 def test_generate_response_sends_messages_array(brain, mocker):
     """A messages list is forwarded to /api/chat as-is."""
     mock_post = mocker.patch(

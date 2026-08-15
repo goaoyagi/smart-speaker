@@ -8,6 +8,8 @@ import logging
 from .config import (
     CHAR_TO_TOKEN_RATIO,
     OLLAMA_API_URL,
+    OLLAMA_AUX_NUM_PREDICT,
+    OLLAMA_AUX_TEMPERATURE,
     OLLAMA_KEEP_ALIVE,
     OLLAMA_MODEL,
     OLLAMA_NUM_CTX,
@@ -97,10 +99,37 @@ class Brain:
                 {"role": "user", "content": prompt},
             ]
 
-        messages = trim_messages_to_token_budget(messages)
-
         logger.info("Generating response with AI...")
+        answer = self._chat(
+            messages,
+            num_predict=OLLAMA_NUM_PREDICT,
+            temperature=OLLAMA_TEMPERATURE,
+            timeout=120,
+        )
+        logger.info("AI Response: %s", answer)
+        return answer
 
+    def generate_auxiliary(self, messages, num_predict=None, temperature=None):
+        """Short non-spoken LLM call for search gating and query rewrite.
+
+        Does not attach ``OLLAMA_SYSTEM_PROMPT``. Callers must pass their own
+        messages and must not speak the result.
+        """
+        if not messages:
+            raise GenerationError("Auxiliary prompt is empty")
+        logger.info("Running auxiliary LLM call...")
+        return self._chat(
+            messages,
+            num_predict=OLLAMA_AUX_NUM_PREDICT if num_predict is None else num_predict,
+            temperature=(
+                OLLAMA_AUX_TEMPERATURE if temperature is None else temperature
+            ),
+            timeout=30,
+        )
+
+    def _chat(self, messages, *, num_predict, temperature, timeout):
+        """POST /api/chat and return the assistant content."""
+        messages = trim_messages_to_token_budget(messages)
         data = http_post_json(
             self.ollama_api_url,
             error_class=GenerationError,
@@ -112,17 +141,14 @@ class Brain:
                 'keep_alive': OLLAMA_KEEP_ALIVE,
                 'options': {
                     'num_ctx': OLLAMA_NUM_CTX,
-                    'num_predict': OLLAMA_NUM_PREDICT,
-                    'temperature': OLLAMA_TEMPERATURE,
+                    'num_predict': num_predict,
+                    'temperature': temperature,
                     'repeat_penalty': OLLAMA_REPEAT_PENALTY,
                 },
             },
-            timeout=120
+            timeout=timeout,
         )
-
         answer = (data.get('message') or {}).get('content', '').strip()
         if not answer:
             raise GenerationError("Ollama returned an empty response")
-
-        logger.info("AI Response: %s", answer)
         return answer

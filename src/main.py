@@ -13,6 +13,8 @@ from .composer import Composer
 from .brain import Brain
 from .speaker import Speaker
 from .conversation_history import ConversationHistory
+from .query_prep import QueryPrep
+from .text_turn import run_text_turn
 from .status_led import StatusLED, LedState
 from .push_to_talk import PushToTalkButton
 from .config import PTT_MIN_RECORD_SECONDS, PTT_MAX_RECORD_SECONDS
@@ -36,6 +38,7 @@ class VoiceAssistant:
         self.retriever = Retriever()
         self.composer = Composer()
         self.brain = Brain()
+        self.query_prep = QueryPrep(self.brain)
         self.speaker = Speaker()
         self.history = ConversationHistory()
         self.status_led = StatusLED()
@@ -138,25 +141,23 @@ class VoiceAssistant:
                 raise
             return
 
-        # --- Web search (non-fatal: degrade to no-context prompt) ---
-        self.status_led.set_state(LedState.SEARCHING)
-        try:
-            search_results = self.retriever.search_web(text)
-        except SearchError as e:
-            logger.warning("Search failed, proceeding without context: %s", e)
-            search_results = []
-
-        # --- Compose & generate (role-tagged history via /api/chat) ---
-        self.status_led.set_state(LedState.THINKING)
         history_messages = self.history.as_messages()
-        messages = self.composer.compose_messages(text, search_results, history_messages)
-
         try:
-            response = self.brain.generate_response(messages)
+            turn = run_text_turn(
+                text,
+                history_messages,
+                retriever=self.retriever,
+                composer=self.composer,
+                brain=self.brain,
+                query_prep=self.query_prep,
+                on_phase=self._on_text_turn_phase,
+            )
         except GenerationError as e:
             logger.error("AI generation failed: %s", e)
             self._safe_speak("申し訳ありませんが、回答を生成できませんでした。")
             raise
+
+        response = turn["answer"]
 
         # --- Speak ---
         self.status_led.set_state(LedState.SPEAKING)
@@ -170,6 +171,13 @@ class VoiceAssistant:
         self.history.add(text, response)
 
         self.status_led.set_state(LedState.IDLE)
+
+    def _on_text_turn_phase(self, name):
+        """Map text-turn phases to LED states."""
+        if name == "search":
+            self.status_led.set_state(LedState.SEARCHING)
+        else:
+            self.status_led.set_state(LedState.THINKING)
 
     def _safe_speak(self, text):
         """Attempt to speak; log and continue if it fails."""

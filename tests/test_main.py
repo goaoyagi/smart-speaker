@@ -38,6 +38,7 @@ def test_voice_assistant_initialization(voice_assistant):
     assert voice_assistant.retriever is not None
     assert voice_assistant.composer is not None
     assert voice_assistant.brain is not None
+    assert voice_assistant.query_prep is not None
     assert voice_assistant.speaker is not None
     assert voice_assistant.status_led is not None
     assert voice_assistant.button is not None
@@ -100,6 +101,7 @@ def test_listen_and_respond_successful_flow(voice_assistant):
     voice_assistant.speaker.speak.assert_called_once_with("今日は晴れです")
     assert voice_assistant.status_led.set_state.call_args_list == [
         call(LedState.LISTENING),
+        call(LedState.THINKING),
         call(LedState.SEARCHING),
         call(LedState.THINKING),
         call(LedState.SPEAKING),
@@ -195,6 +197,7 @@ def test_listen_and_respond_search_failure_degrades_gracefully(voice_assistant):
     voice_assistant.speaker.speak.assert_called_once_with("回答")
     assert voice_assistant.status_led.set_state.call_args_list == [
         call(LedState.LISTENING),
+        call(LedState.THINKING),
         call(LedState.SEARCHING),
         call(LedState.THINKING),
         call(LedState.SPEAKING),
@@ -215,6 +218,7 @@ def test_listen_and_respond_generation_failure(voice_assistant):
         voice_assistant.listen_and_respond()
     assert voice_assistant.status_led.set_state.call_args_list == [
         call(LedState.LISTENING),
+        call(LedState.THINKING),
         call(LedState.SEARCHING),
         call(LedState.THINKING),
         call(LedState.ERROR),
@@ -292,6 +296,7 @@ def test_push_to_talk_turn_successful_flow(voice_assistant):
     voice_assistant.speaker.speak.assert_called_once_with("晴れです")
     assert voice_assistant.status_led.set_state.call_args_list == [
         call(LedState.LISTENING),
+        call(LedState.THINKING),
         call(LedState.SEARCHING),
         call(LedState.THINKING),
         call(LedState.SPEAKING),
@@ -328,3 +333,62 @@ def test_run_push_to_talk_loops_until_interrupt(voice_assistant):
     mock_turn.assert_called_once()
     # IDLE at start of each loop iteration, ERROR after the failed turn.
     assert call(LedState.ERROR) in voice_assistant.status_led.set_state.call_args_list
+
+
+def test_listen_and_respond_skips_search_when_prep_says_so(voice_assistant):
+    """Chitchat can skip SearXNG when query prep returns SKIP."""
+    audio = np.full(16000, 0.5, dtype=np.float32)
+    voice_assistant.listener.record_audio.return_value = audio
+    voice_assistant.listener.transcribe.return_value = "こんにちは"
+    voice_assistant.query_prep.prepare = MagicMock(return_value=(False, "こんにちは"))
+    voice_assistant.composer.compose_messages.return_value = [
+        {"role": "user", "content": "プロンプト"}
+    ]
+    voice_assistant.brain.generate_response.return_value = "こんにちは。"
+
+    voice_assistant.listen_and_respond()
+
+    voice_assistant.retriever.search_web.assert_not_called()
+    voice_assistant.composer.compose_messages.assert_called_once_with(
+        "こんにちは", [], []
+    )
+    voice_assistant.speaker.speak.assert_called_once_with("こんにちは。")
+    assert call(LedState.SEARCHING) not in voice_assistant.status_led.set_state.call_args_list
+
+
+def test_listen_and_respond_searches_rewritten_query(voice_assistant):
+    """Follow-ups search the rewritten standalone query, not the raw utterance."""
+    audio = np.full(16000, 0.5, dtype=np.float32)
+    voice_assistant.listener.record_audio.return_value = audio
+    voice_assistant.listener.transcribe.return_value = "それはいつ完成しましたか？"
+    voice_assistant.query_prep.prepare = MagicMock(
+        return_value=(True, "東京タワー 完成年")
+    )
+    voice_assistant.retriever.search_web.return_value = []
+    voice_assistant.composer.compose_messages.return_value = [
+        {"role": "user", "content": "プロンプト"}
+    ]
+    voice_assistant.brain.generate_response.return_value = "1958年です。"
+
+    voice_assistant.listen_and_respond()
+
+    voice_assistant.retriever.search_web.assert_called_once_with("東京タワー 完成年")
+    args = voice_assistant.composer.compose_messages.call_args[0]
+    assert args[0] == "それはいつ完成しましたか？"
+
+
+def test_listen_and_respond_normalizes_latin_before_history(voice_assistant):
+    """Spoken answers are stored after unit/acronym normalization."""
+    audio = np.full(16000, 0.5, dtype=np.float32)
+    voice_assistant.listener.record_audio.return_value = audio
+    voice_assistant.listener.transcribe.return_value = "長さは？"
+    voice_assistant.retriever.search_web.return_value = []
+    voice_assistant.composer.compose_messages.return_value = [
+        {"role": "user", "content": "プロンプト"}
+    ]
+    voice_assistant.brain.generate_response.return_value = "367kmです。"
+
+    voice_assistant.listen_and_respond()
+
+    voice_assistant.speaker.speak.assert_called_once_with("367キロメートルです。")
+    assert voice_assistant.history.last_answer() == "367キロメートルです。"
