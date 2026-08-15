@@ -26,6 +26,16 @@ def test_default_config_values():
     assert config.RERANK_TOP_K == 3
     assert config.OLLAMA_API_URL == "http://localhost:11434/api/generate"
     assert config.OLLAMA_MODEL == "qwen2.5:3b"
+    assert config.OLLAMA_NUM_CTX == 8192
+    assert config.OLLAMA_NUM_PREDICT == 512
+    assert config.OLLAMA_TEMPERATURE == 0.3
+    assert config.OLLAMA_REPEAT_PENALTY == 1.1
+    assert config.OLLAMA_KEEP_ALIVE == "30m"
+    assert config.OLLAMA_SYSTEM_PROMPT == (
+        "あなたは日本語専用の音声アシスタントです。"
+        "回答はすべて日本語のみで行い、アルファベット（英語の単語や文）を含めてはいけません。"
+        "必要であればカタカナや日本語表現に翻訳して出力してください。"
+    )
     assert config.SPEAKER_DEVICE == "plughw:0,0"
     assert config.PIPER_MODEL_PATH == "./models/piper/tsukuyomi.onnx"
     assert config.PIPER_CONFIG_PATH == "./models/piper/tsukuyomi.onnx.json"
