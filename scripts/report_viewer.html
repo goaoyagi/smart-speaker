@@ -1,0 +1,1425 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Speaker 評価レポートビューア</title>
+  <style>
+    :root {
+      --bg-primary: #0f172a;
+      --bg-secondary: #1e293b;
+      --bg-tertiary: #334155;
+      --bg-card: rgba(30, 41, 59, 0.7);
+      --border-color: #334155;
+      --border-focus: #38bdf8;
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent-blue: #38bdf8;
+      --accent-blue-bg: rgba(56, 189, 248, 0.15);
+      --pass: #22c55e;
+      --pass-bg: rgba(34, 197, 94, 0.15);
+      --pass-border: rgba(34, 197, 94, 0.3);
+      --fail: #ef4444;
+      --fail-bg: rgba(239, 68, 68, 0.15);
+      --fail-border: rgba(239, 68, 68, 0.3);
+      --warn: #f59e0b;
+      --warn-bg: rgba(245, 158, 11, 0.15);
+      --warn-border: rgba(245, 158, 11, 0.3);
+      --diff-better: #22c55e;
+      --diff-worse: #ef4444;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      line-height: 1.5;
+      padding: 24px;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1300px;
+      margin: 0 auto;
+    }
+
+    /* Header & Navigation */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border-color);
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .logo-area {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-badge {
+      background: linear-gradient(135deg, #38bdf8 0%, #818cf8 100%);
+      color: #0f172a;
+      font-weight: bold;
+      font-size: 0.85rem;
+      padding: 4px 10px;
+      border-radius: 6px;
+      letter-spacing: 0.05em;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .nav-tabs {
+      display: flex;
+      gap: 8px;
+      background-color: var(--bg-secondary);
+      padding: 4px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      padding: 8px 18px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+
+    .tab-btn:hover {
+      color: var(--text-primary);
+    }
+
+    .tab-btn.active {
+      background-color: var(--bg-tertiary);
+      color: var(--accent-blue);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+
+    /* Drop Zone & File Input */
+    .dropzone-container {
+      margin-bottom: 24px;
+    }
+
+    .dropzone {
+      border: 2px dashed var(--border-color);
+      border-radius: 12px;
+      padding: 32px 20px;
+      text-align: center;
+      background-color: var(--bg-card);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .dropzone:hover, .dropzone.dragover {
+      border-color: var(--accent-blue);
+      background-color: var(--accent-blue-bg);
+    }
+
+    .dropzone p {
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+      margin-top: 6px;
+    }
+
+    .dropzone-icon {
+      font-size: 2rem;
+      color: var(--accent-blue);
+      margin-bottom: 8px;
+    }
+
+    .file-input {
+      display: none;
+    }
+
+    .diff-dropzones {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    @media (max-width: 768px) {
+      .diff-dropzones {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Cards & Grids */
+    .grid-kpi {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .card {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 16px 20px;
+      backdrop-filter: blur(8px);
+    }
+
+    .card-title {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+
+    .card-value {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .card-sub {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .meta-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: center;
+      background-color: var(--bg-secondary);
+      padding: 12px 18px;
+      border-radius: 8px;
+      margin-bottom: 24px;
+      border: 1px solid var(--border-color);
+      font-size: 0.85rem;
+    }
+
+    .meta-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-secondary);
+    }
+
+    .meta-item strong {
+      color: var(--text-primary);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    .badge-pass {
+      background-color: var(--pass-bg);
+      color: var(--pass);
+      border: 1px solid var(--pass-border);
+    }
+
+    .badge-fail {
+      background-color: var(--fail-bg);
+      color: var(--fail);
+      border: 1px solid var(--fail-border);
+    }
+
+    .badge-warn {
+      background-color: var(--warn-bg);
+      color: var(--warn);
+      border: 1px solid var(--warn-border);
+    }
+
+    .badge-blue {
+      background-color: var(--accent-blue-bg);
+      color: var(--accent-blue);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+
+    /* Tables */
+    .section-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .table-responsive {
+      width: 100%;
+      overflow-x: auto;
+      margin-bottom: 24px;
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.88rem;
+    }
+
+    th, td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    th {
+      background-color: var(--bg-secondary);
+      color: var(--text-secondary);
+      font-weight: 600;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tbody tr:hover {
+      background-color: rgba(255, 255, 255, 0.02);
+    }
+
+    /* Progress bar */
+    .progress-track {
+      background-color: var(--bg-tertiary);
+      border-radius: 9999px;
+      height: 6px;
+      overflow: hidden;
+      width: 100%;
+      min-width: 60px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      border-radius: 9999px;
+      transition: width 0.3s ease;
+    }
+
+    .progress-fill.pass { background-color: var(--pass); }
+    .progress-fill.fail { background-color: var(--fail); }
+
+    /* Filters and Search */
+    .filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 16px;
+      background-color: var(--bg-secondary);
+      padding: 12px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+    }
+
+    .search-input, .select-input {
+      background-color: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.88rem;
+      outline: none;
+    }
+
+    .search-input:focus, .select-input:focus {
+      border-color: var(--border-focus);
+    }
+
+    .search-input {
+      flex: 1;
+      min-width: 180px;
+    }
+
+    .filter-tags {
+      display: flex;
+      gap: 6px;
+    }
+
+    .filter-btn {
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+
+    .filter-btn.active {
+      background-color: var(--accent-blue-bg);
+      border-color: var(--accent-blue);
+      color: var(--accent-blue);
+    }
+
+    /* Turn Items (Accordion / List) */
+    .turn-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 32px;
+    }
+
+    .turn-card {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+
+    .turn-card.fail {
+      border-left: 4px solid var(--fail);
+    }
+
+    .turn-card.pass {
+      border-left: 4px solid var(--pass);
+    }
+
+    .turn-header {
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .turn-header:hover {
+      background-color: rgba(255, 255, 255, 0.02);
+    }
+
+    .turn-title-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      min-width: 280px;
+    }
+
+    .turn-query {
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: var(--text-primary);
+    }
+
+    .turn-stats-brief {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .turn-body {
+      padding: 16px;
+      border-top: 1px solid var(--border-color);
+      background-color: rgba(15, 23, 42, 0.4);
+      display: none;
+      font-size: 0.9rem;
+    }
+
+    .turn-card.open .turn-body {
+      display: block;
+    }
+
+    .turn-body-section {
+      margin-bottom: 12px;
+    }
+
+    .turn-body-section:last-child {
+      margin-bottom: 0;
+    }
+
+    .section-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+      letter-spacing: 0.05em;
+    }
+
+    .answer-box {
+      background-color: var(--bg-secondary);
+      padding: 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: var(--font-sans);
+    }
+
+    .failures-box {
+      background-color: var(--fail-bg);
+      border: 1px solid var(--fail-border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: #fca5a5;
+    }
+
+    .failures-box li {
+      margin-left: 18px;
+    }
+
+    .timing-breakdown {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      background-color: var(--bg-secondary);
+      padding: 8px 12px;
+      border-radius: 6px;
+    }
+
+    /* Comparison Specific */
+    .diff-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      margin-left: 6px;
+    }
+
+    .diff-badge.better {
+      background-color: var(--pass-bg);
+      color: var(--diff-better);
+    }
+
+    .diff-badge.worse {
+      background-color: var(--fail-bg);
+      color: var(--diff-worse);
+    }
+
+    .diff-comparison-view {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 8px;
+    }
+
+    @media (max-width: 768px) {
+      .diff-comparison-view {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .diff-panel {
+      background-color: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 10px;
+    }
+
+    .diff-panel-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* Action Buttons */
+    .btn {
+      background-color: var(--bg-secondary);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+
+    .btn:hover {
+      border-color: var(--accent-blue);
+      color: var(--accent-blue);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 48px 16px;
+      color: var(--text-muted);
+    }
+
+    .empty-state-icon {
+      font-size: 3rem;
+      margin-bottom: 12px;
+    }
+
+    /* Modal */
+    .modal-backdrop {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: rgba(0, 0, 0, 0.75);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+      padding: 20px;
+    }
+
+    .modal-box {
+      background-color: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      max-width: 600px;
+      width: 100%;
+      max-height: 80vh;
+      overflow-y: auto;
+      padding: 24px;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .close-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 1.5rem;
+      cursor: pointer;
+    }
+
+    .close-btn:hover {
+      color: var(--text-primary);
+    }
+
+    pre code {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo-area">
+        <span class="logo-badge">EVAL REPORT</span>
+        <h1>Smart Speaker 評価レポートビューア</h1>
+      </div>
+      <div class="nav-tabs">
+        <button class="tab-btn active" id="tab-single" onclick="switchTab('single')">単一レポート</button>
+        <button class="tab-btn" id="tab-diff" onclick="switchTab('diff')">差分比較 (Diff)</button>
+      </div>
+    </header>
+
+    <!-- ========================================== -->
+    <!-- SINGLE REPORT VIEW                         -->
+    <!-- ========================================== -->
+    <div id="view-single">
+      <div class="dropzone-container">
+        <div class="dropzone" id="dropzone-single" onclick="document.getElementById('file-single').click()">
+          <div class="dropzone-icon">📁</div>
+          <strong>eval_*.json を選択またはドラッグ＆ドロップ</strong>
+          <p>テスト実行で出力された JSON レポートファイルを読み込みます</p>
+        </div>
+        <input type="file" id="file-single" class="file-input" accept=".json" onchange="handleSingleFile(event)">
+      </div>
+
+      <div id="content-single" class="hidden">
+        <!-- Meta Bar -->
+        <div class="meta-bar">
+          <div class="meta-item">📁 <strong id="meta-filename">-</strong></div>
+          <div class="meta-item">🕒 実行日時: <strong id="meta-started">-</strong></div>
+          <div class="meta-item">⏱ 所要時間: <strong id="meta-duration">-</strong></div>
+          <div class="meta-item">🤖 モデル: <strong id="meta-model">-</strong></div>
+          <div class="meta-item">🔍 検索: <span id="meta-search" class="badge badge-blue">-</span></div>
+          <div style="margin-left: auto; display: flex; gap: 8px;">
+            <button class="btn" onclick="openConfigModal()">⚙️ 設定詳細</button>
+            <button class="btn" onclick="copyMarkdownSummary()">📋 サマリMarkdownコピー</button>
+          </div>
+        </div>
+
+        <!-- KPI Cards -->
+        <div class="grid-kpi">
+          <div class="card">
+            <div class="card-title">合格率 (Pass Rate)</div>
+            <div class="card-value" id="kpi-pass-rate">0%</div>
+            <div class="card-sub" id="kpi-pass-turns">0 / 0 ターン合格</div>
+          </div>
+          <div class="card">
+            <div class="card-title">合計所要時間 (平均/中央)</div>
+            <div class="card-value" id="kpi-total-time">0 ms</div>
+            <div class="card-sub" id="kpi-total-time-sub">生成: 0ms / 検索: 0ms</div>
+          </div>
+          <div class="card">
+            <div class="card-title">違反・フォールバック</div>
+            <div class="card-value" id="kpi-violations">0 件</div>
+            <div class="card-sub" id="kpi-violations-sub">英字混入: 0 / Degraded: 0</div>
+          </div>
+          <div class="card">
+            <div class="card-title">回答ボリューム</div>
+            <div class="card-value" id="kpi-chars">0 文字</div>
+            <div class="card-sub" id="kpi-sentences">平均 0 文 / 最大 0 文字</div>
+          </div>
+        </div>
+
+        <!-- Category & Stats Breakdown -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px;">
+          <div>
+            <div class="section-title">📂 カテゴリ別合格率</div>
+            <div class="table-responsive">
+              <table id="table-category">
+                <thead>
+                  <tr>
+                    <th>カテゴリ</th>
+                    <th>合格 / ターン</th>
+                    <th>合格率</th>
+                    <th style="width: 30%;">進捗</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+          <div>
+            <div class="section-title">⏱ 処理時間・文字数統計</div>
+            <div class="table-responsive">
+              <table id="table-stats">
+                <thead>
+                  <tr>
+                    <th>指標</th>
+                    <th>中央値</th>
+                    <th>平均</th>
+                    <th>最大</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Turn List with Filters -->
+        <div class="section-title">
+          <span>📝 ターン別詳細一覧 (<span id="filtered-turn-count">0</span> 件)</span>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn" onclick="toggleAllTurns(true)">すべて展開</button>
+            <button class="btn" onclick="toggleAllTurns(false)">すべて閉じる</button>
+          </div>
+        </div>
+
+        <div class="filter-bar">
+          <input type="text" id="search-turns" class="search-input" placeholder="質問、回答、失敗理由、IDを検索..." oninput="filterTurns()">
+          <select id="filter-category" class="select-input" onchange="filterTurns()">
+            <option value="">全カテゴリ</option>
+          </select>
+          <div class="filter-tags">
+            <button class="filter-btn active" data-status="all" onclick="setStatusFilter('all', this)">すべて</button>
+            <button class="filter-btn" data-status="fail" onclick="setStatusFilter('fail', this)">FAIL のみ</button>
+            <button class="filter-btn" data-status="pass" onclick="setStatusFilter('pass', this)">PASS のみ</button>
+            <button class="filter-btn" data-status="latin" onclick="setStatusFilter('latin', this)">英字混入</button>
+          </div>
+        </div>
+
+        <div class="turn-list" id="turn-list-container"></div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- DIFF COMPARISON VIEW                       -->
+    <!-- ========================================== -->
+    <div id="view-diff" class="hidden">
+      <div class="diff-dropzones">
+        <div>
+          <div class="dropzone" id="dropzone-baseline" onclick="document.getElementById('file-baseline').click()">
+            <div class="dropzone-icon">1️⃣</div>
+            <strong>Baseline (改善前) JSON</strong>
+            <p id="label-baseline">ファイルを選択またはドロップ</p>
+          </div>
+          <input type="file" id="file-baseline" class="file-input" accept=".json" onchange="handleDiffFile(event, 'baseline')">
+        </div>
+        <div>
+          <div class="dropzone" id="dropzone-target" onclick="document.getElementById('file-target').click()">
+            <div class="dropzone-icon">2️⃣</div>
+            <strong>Target (改善後) JSON</strong>
+            <p id="label-target">ファイルを選択またはドロップ</p>
+          </div>
+          <input type="file" id="file-target" class="file-input" accept=".json" onchange="handleDiffFile(event, 'target')">
+        </div>
+      </div>
+
+      <div id="content-diff" class="hidden" style="margin-top: 24px;">
+        <!-- Diff KPI Comparison -->
+        <div class="grid-kpi">
+          <div class="card">
+            <div class="card-title">合格率の変化</div>
+            <div class="card-value" id="diff-kpi-pass">
+              <span id="diff-pass-rate-val">0%</span>
+              <span id="diff-pass-badge" class="diff-badge">-</span>
+            </div>
+            <div class="card-sub" id="diff-pass-sub">前: 0% → 後: 0%</div>
+          </div>
+          <div class="card">
+            <div class="card-title">平均合計時間 (ms)</div>
+            <div class="card-value" id="diff-kpi-time">
+              <span id="diff-time-val">0 ms</span>
+              <span id="diff-time-badge" class="diff-badge">-</span>
+            </div>
+            <div class="card-sub" id="diff-time-sub">前: 0ms → 後: 0ms</div>
+          </div>
+          <div class="card">
+            <div class="card-title">英字混入違反</div>
+            <div class="card-value" id="diff-kpi-latin">
+              <span id="diff-latin-val">0 件</span>
+              <span id="diff-latin-badge" class="diff-badge">-</span>
+            </div>
+            <div class="card-sub" id="diff-latin-sub">前: 0 → 後: 0</div>
+          </div>
+          <div class="card">
+            <div class="card-title">ターン状態変化</div>
+            <div class="card-value" id="diff-kpi-changes">
+              <span style="color: var(--diff-better);" id="diff-improved-count">↑ 0</span> / 
+              <span style="color: var(--diff-worse);" id="diff-regressed-count">↓ 0</span>
+            </div>
+            <div class="card-sub">改善 / 悪化 ターン数</div>
+          </div>
+        </div>
+
+        <!-- Diff Category Breakdown -->
+        <div class="section-title">📂 カテゴリ別変化</div>
+        <div class="table-responsive">
+          <table id="table-diff-category">
+            <thead>
+              <tr>
+                <th>カテゴリ</th>
+                <th>Baseline (改善前)</th>
+                <th>Target (改善後)</th>
+                <th>合格率 差分</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- Diff Turns -->
+        <div class="section-title" style="margin-top: 24px;">
+          <span>🔍 ターン別 比較・変化 (<span id="diff-filtered-count">0</span> 件)</span>
+        </div>
+
+        <div class="filter-bar">
+          <input type="text" id="search-diff-turns" class="search-input" placeholder="質問、回答、IDを検索..." oninput="filterDiffTurns()">
+          <div class="filter-tags">
+            <button class="filter-btn active" data-diffstatus="all" onclick="setDiffStatusFilter('all', this)">すべて</button>
+            <button class="filter-btn" data-diffstatus="improved" onclick="setDiffStatusFilter('improved', this)">🟢 改善 (FAIL → PASS)</button>
+            <button class="filter-btn" data-diffstatus="regressed" onclick="setDiffStatusFilter('regressed', this)">🔴 悪化 (PASS → FAIL)</button>
+            <button class="filter-btn" data-diffstatus="same_fail" onclick="setDiffStatusFilter('same_fail', this)">⚪️ 変わらず FAIL</button>
+          </div>
+        </div>
+
+        <div class="turn-list" id="diff-turn-list-container"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Config Modal -->
+  <div id="modal-config" class="modal-backdrop hidden" onclick="if(event.target === this) closeConfigModal()">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>⚙️ 実行時設定 (Config Snapshot)</h3>
+        <button class="close-btn" onclick="closeConfigModal()">&times;</button>
+      </div>
+      <div class="table-responsive" style="margin-bottom: 0;">
+        <table id="table-config-modal">
+          <thead>
+            <tr><th>設定キー</th><th>値</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Global State
+    let singleData = null;
+    let baselineData = null;
+    let targetData = null;
+    let singleStatusFilter = 'all';
+    let diffStatusFilter = 'all';
+
+    // Drag and Drop Initialization
+    function setupDropzone(dropzoneId, onFile) {
+      const dropzone = document.getElementById(dropzoneId);
+      if (!dropzone) return;
+
+      ['dragenter', 'dragover'].forEach(name => {
+        dropzone.addEventListener(name, (e) => {
+          e.preventDefault();
+          dropzone.classList.add('dragover');
+        });
+      });
+
+      ['dragleave', 'drop'].forEach(name => {
+        dropzone.addEventListener(name, (e) => {
+          e.preventDefault();
+          dropzone.classList.remove('dragover');
+        });
+      });
+
+      dropzone.addEventListener('drop', (e) => {
+        const files = e.dataTransfer.files;
+        if (files && files.length > 0) {
+          onFile(files[0]);
+        }
+      });
+    }
+
+    setupDropzone('dropzone-single', file => loadSingleJson(file));
+    setupDropzone('dropzone-baseline', file => loadDiffJson(file, 'baseline'));
+    setupDropzone('dropzone-target', file => loadDiffJson(file, 'target'));
+
+    function switchTab(tab) {
+      document.getElementById('tab-single').classList.toggle('active', tab === 'single');
+      document.getElementById('tab-diff').classList.toggle('active', tab === 'diff');
+      document.getElementById('view-single').classList.toggle('hidden', tab !== 'single');
+      document.getElementById('view-diff').classList.toggle('hidden', tab !== 'diff');
+    }
+
+    // File Handlers
+    function handleSingleFile(e) {
+      if (e.target.files && e.target.files[0]) {
+        loadSingleJson(e.target.files[0]);
+      }
+    }
+
+    function handleDiffFile(e, type) {
+      if (e.target.files && e.target.files[0]) {
+        loadDiffJson(e.target.files[0], type);
+      }
+    }
+
+    function loadSingleJson(file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const json = JSON.parse(e.target.result);
+          if (!json.summary || !json.turns) {
+            alert('有効な評価レポートJSONではありません（summary または turns が見つかりません）。');
+            return;
+          }
+          singleData = json;
+          singleData._fileName = file.name;
+          renderSingleReport();
+        } catch (err) {
+          alert('JSONの解析に失敗しました: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function loadDiffJson(file, type) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const json = JSON.parse(e.target.result);
+          if (!json.summary || !json.turns) {
+            alert('有効な評価レポートJSONではありません。');
+            return;
+          }
+          if (type === 'baseline') {
+            baselineData = json;
+            baselineData._fileName = file.name;
+            document.getElementById('label-baseline').textContent = `📄 ${file.name}`;
+          } else {
+            targetData = json;
+            targetData._fileName = file.name;
+            document.getElementById('label-target').textContent = `📄 ${file.name}`;
+          }
+          if (baselineData && targetData) {
+            renderDiffReport();
+          }
+        } catch (err) {
+          alert('JSONの解析に失敗しました: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    // Render Single Report
+    function renderSingleReport() {
+      document.getElementById('content-single').classList.remove('hidden');
+      const data = singleData;
+      const s = data.summary;
+
+      // Meta
+      document.getElementById('meta-filename').textContent = data._fileName || 'eval_report.json';
+      document.getElementById('meta-started').textContent = data.started_at ? new Date(data.started_at).toLocaleString() : '-';
+      document.getElementById('meta-duration').textContent = data.duration_s ? `${data.duration_s} 秒` : '-';
+      document.getElementById('meta-model').textContent = data.config?.OLLAMA_MODEL || '-';
+      document.getElementById('meta-search').textContent = data.use_search ? '有効' : '無効';
+
+      // KPI
+      const passPercent = (s.pass_rate * 100).toFixed(1);
+      document.getElementById('kpi-pass-rate').textContent = `${passPercent}%`;
+      document.getElementById('kpi-pass-turns').textContent = `${s.passed} / ${s.turns} ターン合格`;
+
+      const totalTimeMean = s.total_ms?.mean ? Math.round(s.total_ms.mean) : 0;
+      const totalTimeMed = s.total_ms?.median ? Math.round(s.total_ms.median) : 0;
+      document.getElementById('kpi-total-time').textContent = `${totalTimeMean} ms`;
+      document.getElementById('kpi-total-time-sub').textContent = 
+        `中央値: ${totalTimeMed}ms (生成: ${Math.round(s.generate_ms?.mean || 0)}ms / 検索: ${Math.round(s.search_ms?.mean || 0)}ms)`;
+
+      document.getElementById('kpi-violations').textContent = `${s.latin_violations + (s.warnings || 0)} 件`;
+      document.getElementById('kpi-violations-sub').textContent = `英字混入: ${s.latin_violations} / Degraded: ${s.degraded || 0} / 警告: ${s.warnings || 0}`;
+
+      const charMean = s.answer_chars?.mean ? Math.round(s.answer_chars.mean) : 0;
+      const sentMean = s.sentences?.mean ? s.sentences.mean.toFixed(1) : '0';
+      document.getElementById('kpi-chars').textContent = `${charMean} 文字`;
+      document.getElementById('kpi-sentences').textContent = `平均 ${sentMean} 文 / 最大 ${s.answer_chars?.max || 0} 文字`;
+
+      // Category Table
+      const catTableBody = document.querySelector('#table-category tbody');
+      catTableBody.innerHTML = '';
+      const catSelect = document.getElementById('filter-category');
+      catSelect.innerHTML = '<option value="">全カテゴリ</option>';
+
+      if (s.by_category) {
+        Object.keys(s.by_category).sort().forEach(cat => {
+          const b = s.by_category[cat];
+          const rate = (b.pass_rate * 100).toFixed(1);
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td><strong>${cat}</strong></td>
+            <td>${b.passed} / ${b.turns}</td>
+            <td><span class="badge ${b.pass_rate >= 0.8 ? 'badge-pass' : b.pass_rate >= 0.5 ? 'badge-warn' : 'badge-fail'}">${rate}%</span></td>
+            <td>
+              <div class="progress-track">
+                <div class="progress-fill ${b.pass_rate >= 0.5 ? 'pass' : 'fail'}" style="width: ${rate}%;"></div>
+              </div>
+            </td>
+          `;
+          catTableBody.appendChild(tr);
+
+          const opt = document.createElement('option');
+          opt.value = cat;
+          opt.textContent = `${cat} (${b.passed}/${b.turns})`;
+          catSelect.appendChild(opt);
+        });
+      }
+
+      // Stats Table
+      const statsTableBody = document.querySelector('#table-stats tbody');
+      statsTableBody.innerHTML = '';
+      const statsList = [
+        { key: 'prep_ms', label: 'クエリ準備 (ms)' },
+        { key: 'search_ms', label: '検索 (ms)' },
+        { key: 'generate_ms', label: '生成 (ms)' },
+        { key: 'total_ms', label: '合計時間 (ms)' },
+        { key: 'answer_chars', label: '回答文字数' },
+        { key: 'sentences', label: '文数' },
+      ];
+      statsList.forEach(item => {
+        const stat = s[item.key];
+        if (stat) {
+          const isMs = item.key.endsWith('_ms');
+          const fmt = (v) => isMs ? Math.round(v).toLocaleString() : Number(v).toFixed(1);
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td><strong>${item.label}</strong></td>
+            <td>${fmt(stat.median)}</td>
+            <td>${fmt(stat.mean)}</td>
+            <td>${fmt(stat.max)}</td>
+          `;
+          statsTableBody.appendChild(tr);
+        }
+      });
+
+      filterTurns();
+    }
+
+    function setStatusFilter(status, el) {
+      singleStatusFilter = status;
+      document.querySelectorAll('#view-single .filter-tags .filter-btn').forEach(btn => btn.classList.remove('active'));
+      el.classList.add('active');
+      filterTurns();
+    }
+
+    function filterTurns() {
+      if (!singleData) return;
+      const query = (document.getElementById('search-turns').value || '').toLowerCase();
+      const selectedCat = document.getElementById('filter-category').value;
+      const container = document.getElementById('turn-list-container');
+      container.innerHTML = '';
+
+      let matchedCount = 0;
+
+      singleData.turns.forEach((t, idx) => {
+        // Status filter
+        if (singleStatusFilter === 'pass' && !t.passed) return;
+        if (singleStatusFilter === 'fail' && t.passed) return;
+        if (singleStatusFilter === 'latin' && (!t.latin_runs || t.latin_runs.length === 0)) return;
+
+        // Category filter
+        if (selectedCat && t.category !== selectedCat) return;
+
+        // Text search
+        if (query) {
+          const matchTarget = `${t.case_id} ${t.category} ${t.input} ${t.answer || ''} ${(t.failures || []).join(' ')}`.toLowerCase();
+          if (!matchTarget.includes(query)) return;
+        }
+
+        matchedCount++;
+        const card = document.createElement('div');
+        card.className = `turn-card ${t.passed ? 'pass' : 'fail'}`;
+        card.id = `turn-card-${idx}`;
+
+        const totalMs = Math.round(t.total_ms || 0);
+        const searchMs = Math.round(t.search_ms || 0);
+        const genMs = Math.round(t.generate_ms || 0);
+
+        card.innerHTML = `
+          <div class="turn-header" onclick="document.getElementById('turn-card-${idx}').classList.toggle('open')">
+            <div class="turn-title-group">
+              <span class="badge ${t.passed ? 'badge-pass' : 'badge-fail'}">${t.passed ? 'PASS' : 'FAIL'}</span>
+              <span class="badge badge-blue">${t.case_id}</span>
+              <span class="turn-query">${escapeHtml(t.input)}</span>
+            </div>
+            <div class="turn-stats-brief">
+              <span>${t.answer_chars}文字 / ${t.sentences}文</span>
+              <span>🔍 ${t.search_hits}件</span>
+              <span>⏱ ${totalMs}ms</span>
+              <span>▼</span>
+            </div>
+          </div>
+          <div class="turn-body">
+            <div class="turn-body-section">
+              <div class="section-label">回答 (Answer)</div>
+              <div class="answer-box">${escapeHtml(t.answer || '(回答なし)')}</div>
+            </div>
+            ${t.failures && t.failures.length > 0 ? `
+              <div class="turn-body-section">
+                <div class="section-label" style="color: var(--fail);">失敗理由 (Failures)</div>
+                <div class="failures-box">
+                  <ul>
+                    ${t.failures.map(f => `<li>${escapeHtml(f)}</li>`).join('')}
+                  </ul>
+                </div>
+              </div>
+            ` : ''}
+            ${t.warnings && t.warnings.length > 0 ? `
+              <div class="turn-body-section">
+                <div class="section-label" style="color: var(--warn);">警告 (Warnings)</div>
+                <div style="background-color: var(--warn-bg); border: 1px solid var(--warn-border); padding: 6px 12px; border-radius: 6px; font-size: 0.85rem; color: #fde68a;">
+                  ${t.warnings.map(w => `<div>⚠️ ${escapeHtml(w)}</div>`).join('')}
+                </div>
+              </div>
+            ` : ''}
+            <div class="turn-body-section">
+              <div class="section-label">処理内訳 & クエリ</div>
+              <div class="timing-breakdown">
+                <div>検索クエリ: <strong>${escapeHtml(t.search_query || t.input)}</strong></div>
+                <div>準備: <strong>${Math.round(t.prep_ms || 0)}ms</strong></div>
+                <div>検索: <strong>${searchMs}ms</strong></div>
+                <div>生成: <strong>${genMs}ms</strong></div>
+                <div>合計: <strong>${totalMs}ms</strong></div>
+                <div>経路: <strong>${t.path}</strong></div>
+              </div>
+            </div>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+
+      document.getElementById('filtered-turn-count').textContent = matchedCount;
+      if (matchedCount === 0) {
+        container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🔍</div>該当するターンが見つかりませんでした</div>`;
+      }
+    }
+
+    function toggleAllTurns(open) {
+      document.querySelectorAll('#turn-list-container .turn-card').forEach(card => {
+        card.classList.toggle('open', open);
+      });
+    }
+
+    // Config Modal
+    function openConfigModal() {
+      if (!singleData || !singleData.config) return;
+      const tbody = document.querySelector('#table-config-modal tbody');
+      tbody.innerHTML = '';
+      Object.entries(singleData.config).sort(([a], [b]) => a.localeCompare(b)).forEach(([k, v]) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td><code>${escapeHtml(k)}</code></td><td><code>${escapeHtml(String(v))}</code></td>`;
+        tbody.appendChild(tr);
+      });
+      document.getElementById('modal-config').classList.remove('hidden');
+    }
+
+    function closeConfigModal() {
+      document.getElementById('modal-config').classList.add('hidden');
+    }
+
+    // Markdown Copy
+    function copyMarkdownSummary() {
+      if (!singleData) return;
+      const d = singleData;
+      const s = d.summary;
+      let md = `# 評価レポート サマリ\n\n`;
+      md += `- 実行: ${d.started_at}\n`;
+      md += `- モデル: \`${d.config?.OLLAMA_MODEL}\`\n`;
+      md += `- 検索: ${d.use_search ? '有効' : '無効'}\n`;
+      md += `- 合格率: ${s.passed}/${s.turns} (${(s.pass_rate * 100).toFixed(1)}%)\n\n`;
+      md += `| 指標 | 中央値 | 平均 | 最大 |\n| --- | --- | --- | --- |\n`;
+      const stats = [
+        ['回答文字数', s.answer_chars],
+        ['文数', s.sentences],
+        ['検索(ms)', s.search_ms],
+        ['生成(ms)', s.generate_ms],
+        ['合計(ms)', s.total_ms],
+      ];
+      stats.forEach(([label, st]) => {
+        if (st) md += `| ${label} | ${st.median} | ${st.mean} | ${st.max} |\n`;
+      });
+      navigator.clipboard.writeText(md).then(() => {
+        alert('サマリMarkdownをクリップボードにコピーしました！');
+      });
+    }
+
+    // ==========================================
+    // DIFF / COMPARISON LOGIC
+    // ==========================================
+    function renderDiffReport() {
+      document.getElementById('content-diff').classList.remove('hidden');
+      const bSum = baselineData.summary;
+      const tSum = targetData.summary;
+
+      // Pass rate diff
+      const bPass = bSum.pass_rate * 100;
+      const tPass = tSum.pass_rate * 100;
+      const passDiff = tPass - bPass;
+      document.getElementById('diff-pass-rate-val').textContent = `${tPass.toFixed(1)}%`;
+      const passBadge = document.getElementById('diff-pass-badge');
+      passBadge.textContent = `${passDiff >= 0 ? '+' : ''}${passDiff.toFixed(1)}%p`;
+      passBadge.className = `diff-badge ${passDiff > 0 ? 'better' : passDiff < 0 ? 'worse' : ''}`;
+      document.getElementById('diff-pass-sub').textContent = `前: ${bPass.toFixed(1)}% (${bSum.passed}/${bSum.turns}) → 後: ${tPass.toFixed(1)}% (${tSum.passed}/${tSum.turns})`;
+
+      // Total Time diff
+      const bTime = bSum.total_ms?.mean || 0;
+      const tTime = tSum.total_ms?.mean || 0;
+      const timeDiff = tTime - bTime;
+      document.getElementById('diff-time-val').textContent = `${Math.round(tTime)} ms`;
+      const timeBadge = document.getElementById('diff-time-badge');
+      timeBadge.textContent = `${timeDiff <= 0 ? '' : '+'}${Math.round(timeDiff)} ms`;
+      timeBadge.className = `diff-badge ${timeDiff < 0 ? 'better' : timeDiff > 0 ? 'worse' : ''}`;
+      document.getElementById('diff-time-sub').textContent = `前: ${Math.round(bTime)}ms → 後: ${Math.round(tTime)}ms`;
+
+      // Latin Violations diff
+      const bLatin = bSum.latin_violations || 0;
+      const tLatin = tSum.latin_violations || 0;
+      const latinDiff = tLatin - bLatin;
+      document.getElementById('diff-latin-val').textContent = `${tLatin} 件`;
+      const latinBadge = document.getElementById('diff-latin-badge');
+      latinBadge.textContent = `${latinDiff <= 0 ? '' : '+'}${latinDiff}`;
+      latinBadge.className = `diff-badge ${latinDiff < 0 ? 'better' : latinDiff > 0 ? 'worse' : ''}`;
+      document.getElementById('diff-latin-sub').textContent = `前: ${bLatin} → 後: ${tLatin}`;
+
+      // Category Diff Table
+      const catTableBody = document.querySelector('#table-diff-category tbody');
+      catTableBody.innerHTML = '';
+      const allCats = new Set([
+        ...Object.keys(bSum.by_category || {}),
+        ...Object.keys(tSum.by_category || {})
+      ]);
+      Array.from(allCats).sort().forEach(cat => {
+        const b = bSum.by_category?.[cat] || { passed: 0, turns: 0, pass_rate: 0 };
+        const t = tSum.by_category?.[cat] || { passed: 0, turns: 0, pass_rate: 0 };
+        const diffRate = (t.pass_rate - b.pass_rate) * 100;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><strong>${cat}</strong></td>
+          <td>${(b.pass_rate * 100).toFixed(1)}% (${b.passed}/${b.turns})</td>
+          <td>${(t.pass_rate * 100).toFixed(1)}% (${t.passed}/${t.turns})</td>
+          <td>
+            <span class="diff-badge ${diffRate > 0 ? 'better' : diffRate < 0 ? 'worse' : ''}">
+              ${diffRate >= 0 ? '+' : ''}${diffRate.toFixed(1)}%p
+            </span>
+          </td>
+        `;
+        catTableBody.appendChild(tr);
+      });
+
+      // Match Turns & Calculate Improvements / Regressions
+      renderDiffTurnList();
+    }
+
+    function setDiffStatusFilter(status, el) {
+      diffStatusFilter = status;
+      document.querySelectorAll('#view-diff .filter-tags .filter-btn').forEach(btn => btn.classList.remove('active'));
+      el.classList.add('active');
+      renderDiffTurnList();
+    }
+
+    function renderDiffTurnList() {
+      if (!baselineData || !targetData) return;
+      const container = document.getElementById('diff-turn-list-container');
+      container.innerHTML = '';
+      const query = (document.getElementById('search-diff-turns').value || '').toLowerCase();
+
+      // Index baseline turns by case_id + run + input
+      const bMap = new Map();
+      baselineData.turns.forEach(t => {
+        const key = `${t.case_id}_${t.run}_${t.input}`;
+        bMap.set(key, t);
+      });
+
+      let improvedCount = 0;
+      let regressedCount = 0;
+      let matchedCount = 0;
+
+      targetData.turns.forEach((tTarget, idx) => {
+        const key = `${tTarget.case_id}_${tTarget.run}_${tTarget.input}`;
+        const tBase = bMap.get(key) || {
+          passed: false,
+          answer: '(データなし)',
+          failures: ['ベースラインに対応するターンがありません'],
+          total_ms: 0,
+          answer_chars: 0,
+        };
+
+        const wasPassed = tBase.passed;
+        const isPassed = tTarget.passed;
+
+        let statusType = 'same_pass';
+        if (!wasPassed && isPassed) {
+          statusType = 'improved';
+          improvedCount++;
+        } else if (wasPassed && !isPassed) {
+          statusType = 'regressed';
+          regressedCount++;
+        } else if (!wasPassed && !isPassed) {
+          statusType = 'same_fail';
+        }
+
+        // Filtering
+        if (diffStatusFilter !== 'all' && diffStatusFilter !== statusType) return;
+        if (query) {
+          const matchText = `${tTarget.case_id} ${tTarget.input} ${tTarget.answer || ''} ${tBase.answer || ''}`.toLowerCase();
+          if (!matchText.includes(query)) return;
+        }
+
+        matchedCount++;
+        const card = document.createElement('div');
+        card.className = `turn-card ${statusType === 'improved' ? 'pass' : statusType === 'regressed' ? 'fail' : ''}`;
+        
+        let statusBadge = '';
+        if (statusType === 'improved') statusBadge = `<span class="badge badge-pass">🟢 改善 (FAIL → PASS)</span>`;
+        else if (statusType === 'regressed') statusBadge = `<span class="badge badge-fail">🔴 悪化 (PASS → FAIL)</span>`;
+        else if (statusType === 'same_fail') statusBadge = `<span class="badge badge-fail">⚪️ FAIL 維持</span>`;
+        else statusBadge = `<span class="badge badge-pass">PASS 維持</span>`;
+
+        card.innerHTML = `
+          <div class="turn-header" onclick="this.parentElement.classList.toggle('open')">
+            <div class="turn-title-group">
+              ${statusBadge}
+              <span class="badge badge-blue">${tTarget.case_id}</span>
+              <span class="turn-query">${escapeHtml(tTarget.input)}</span>
+            </div>
+            <div class="turn-stats-brief">
+              <span>時間: ${Math.round(tBase.total_ms || 0)}ms → ${Math.round(tTarget.total_ms || 0)}ms</span>
+              <span>▼</span>
+            </div>
+          </div>
+          <div class="turn-body">
+            <div class="diff-comparison-view">
+              <div class="diff-panel">
+                <div class="diff-panel-title">
+                  <span>1️⃣ Baseline (改善前)</span>
+                  <span class="badge ${wasPassed ? 'badge-pass' : 'badge-fail'}">${wasPassed ? 'PASS' : 'FAIL'}</span>
+                </div>
+                <div class="answer-box" style="margin-bottom: 8px;">${escapeHtml(tBase.answer || '')}</div>
+                ${tBase.failures && tBase.failures.length > 0 ? `
+                  <div class="failures-box"><ul>${tBase.failures.map(f => `<li>${escapeHtml(f)}</li>`).join('')}</ul></div>
+                ` : ''}
+              </div>
+              <div class="diff-panel">
+                <div class="diff-panel-title">
+                  <span>2️⃣ Target (改善後)</span>
+                  <span class="badge ${isPassed ? 'badge-pass' : 'badge-fail'}">${isPassed ? 'PASS' : 'FAIL'}</span>
+                </div>
+                <div class="answer-box" style="margin-bottom: 8px;">${escapeHtml(tTarget.answer || '')}</div>
+                ${tTarget.failures && tTarget.failures.length > 0 ? `
+                  <div class="failures-box"><ul>${tTarget.failures.map(f => `<li>${escapeHtml(f)}</li>`).join('')}</ul></div>
+                ` : ''}
+              </div>
+            </div>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+
+      document.getElementById('diff-improved-count').textContent = `↑ ${improvedCount}`;
+      document.getElementById('diff-regressed-count').textContent = `↓ ${regressedCount}`;
+      document.getElementById('diff-filtered-count').textContent = matchedCount;
+
+      if (matchedCount === 0) {
+        container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🔍</div>該当する比較ターンが見つかりませんでした</div>`;
+      }
+    }
+
+    function filterDiffTurns() {
+      renderDiffTurnList();
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+  </script>
+</body>
+</html>
