@@ -10,7 +10,7 @@ AIエージェント（Devin など）がこのリポジトリで作業する際
 
 `project_context.md` の要件を、実装・修正時に守るためのルール。
 
-- **生成前RAG** の基本順序を崩さない（検索要否判定・クエリ書き換え → 検索 → Reranking → プロンプト構成 → 生成）。
+- **生成前RAG** の基本順序を崩さない（検索要否判定・クエリ書き換え → 検索 → Reranking → 本文取得 → パッセージ再ランク → プロンプト構成 → 生成）。
   - **最終回答の生成は、検索とコンテキスト構成の後に1回だけ**行う。生成した回答を LLM で
     再度検証・修正・推敲する多段生成（生成後検証）は導入しない。発話前の単位・略語の
     機械的な日本語読み化（`speech_normalize.py`）は LLM 推敲ではないので、この禁止の対象外。
@@ -76,7 +76,7 @@ pytest で自動実行しない、手動実行のスクリプトを置く。テ�
 - 各モジュールは先頭に `#!/usr/bin/env python3` とモジュール docstring を置く既存スタイルに合わせる。
 - **設定値は必ず `src/config.py` 経由**で読む。モジュール内で `os.getenv()` を直接呼ばない
   （設定の重複を避けるため一元管理している）。
-- **HTTP 通信は `src/http_client.py` に集約する**（既存は `http_get_json` / `http_post_json`。
+- **HTTP 通信は `src/http_client.py` に集約する**（既存は `http_get_json` / `http_get_text` / `http_post_json`。
   JSON 以外を扱うなど既存関数で対応できない場合は、同じファイルに関数を追加する）。
   `requests` を各モジュールで直接呼び出して重複したエラーハンドリングを書かない。
   URL は `config.validate_url()`（`http` / `https` のみ許可）で検証する。
@@ -93,6 +93,11 @@ pytest で自動実行しない、手動実行のスクリプトを置く。テ�
 - **speaker.py**: 本家 Piper（espeak-ng 依存）は使わない。必ず日本語特化 fork の
   `piper-tts-plus` を使うこと（音声モデルは日本語 ONNX + JSON 設定）。
 - **retriever.py / brain.py**: 外部 API 通信部。テストでは必ずモック化する。
+- **retriever.py**: 結果 Rerank のあと、上位 URL を並列取得して `trafilatura` で本文抽出し、
+  パッセージに分割して同じクロスエンコーダで二段 Rerank する。本文取得・抽出・二段 Rerank
+  の失敗は非致命で、その URL のスニペットまたは取得済み本文へ degrade する。
+  `trafilatura` は使う直前の動的 import。ページ取得は `http_get_text` を使い、
+  `retriever.py` から `requests` を直接呼ばない。
 - **brain.py**: `/api/chat` に `messages` / `keep_alive` / `options`（`num_ctx` / `num_predict` / `temperature` / `repeat_penalty`）を渡す。日本語限定の指示は `OLLAMA_SYSTEM_PROMPT`（system メッセージ）で維持する。補助呼び出しは `generate_auxiliary()`（`OLLAMA_AUX_NUM_PREDICT` / `OLLAMA_AUX_TEMPERATURE`）を使い、spoken system prompt は付けない。設定は `src/config.py` 経由。`prompt[:10000]` は使わず、検索コンテキストは `CONTEXT_CHAR_BUDGET`、履歴はトークン予算で削る。
 - **composer.py**: 本番は `compose_messages()`。日本語限定を維持する。文数は質問タイプに合わせる（事実は1〜3文、説明は3〜5文、結論先出し）。検索結果は関係するものだけを事実とし、無関係なら使わず、使う場合は推測で補わない。発話に「検索結果」とは言わない。`compose_prompt()` は切り戻し用に残す。
 - **query_prep.py**: 検索要否とクエリ書き換えを1回の補助LLM呼び出しで行う。失敗は非致命で元の質問へ degrade する。結果は発話しない。

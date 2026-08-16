@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Shared HTTP client - Eliminates duplicated request/error-handling logic
-in retriever.py and brain.py.
+in retriever.py and brain.py. JSON helpers plus HTML/text GET.
 
 Each caller passes its own exception class so the generic HTTP logic
 still raises domain-specific errors (SearchError, GenerationError).
@@ -29,6 +29,25 @@ def http_get_json(url, error_class, service_name, params=None, headers=None, tim
         ) from e
     except (ValueError, requests.exceptions.JSONDecodeError) as e:
         raise error_class(f"Invalid JSON response from {service_name}: {e}") from e
+
+
+def http_get_text(url, error_class, service_name, params=None, headers=None, timeout=10):
+    """Perform a GET request and return the response body as text.
+
+    Raises error_class (wrapping the underlying requests exception) on failure.
+    """
+    try:
+        response = requests.get(url, params=params, headers=headers, timeout=timeout)
+        response.raise_for_status()
+        return response.text
+    except requests.exceptions.ConnectionError as e:
+        raise error_class(f"Cannot connect to {service_name} at {url}: {e}") from e
+    except requests.exceptions.Timeout as e:
+        raise error_class(f"{service_name} request timed out: {e}") from e
+    except requests.exceptions.HTTPError as e:
+        raise error_class(
+            f"{service_name} returned an error (HTTP {response.status_code}): {e}"
+        ) from e
 
 
 def http_post_json(url, error_class, service_name, json_body=None, timeout=30):
