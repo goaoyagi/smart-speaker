@@ -21,6 +21,7 @@ from .config import (
     FETCH_PAGE_TOP_N,
     FETCH_PAGE_TIMEOUT,
     PASSAGE_CHARS,
+    CONTEXT_CHAR_BUDGET,
     validate_url,
 )
 from .http_client import http_get_json, http_get_text
@@ -91,6 +92,38 @@ def _split_into_passages(text, size):
         passages.append(current)
 
     return [p for p in passages if p]
+
+
+def _clip_to_char_budget(items, budget=None):
+    """Keep leading ``items`` until the combined title+content length would
+    exceed ``budget``, dropping the rest from the back.
+
+    Passage-level reranking can return many small passages (up to
+    ``FETCH_PAGE_TOP_N`` pages, each split into ``PASSAGE_CHARS``-sized
+    chunks), so the final list is bounded here the same way
+    ``composer.clip_search_results`` bounds the composed prompt. At least
+    one item is always kept, even if it alone exceeds the budget, so a
+    single oversized passage cannot degrade the result to nothing.
+    """
+    if budget is None:
+        budget = CONTEXT_CHAR_BUDGET
+
+    kept = []
+    total_chars = 0
+    for item in items:
+        item_chars = len(item.get("title", "")) + len(item.get("content", ""))
+        if kept and total_chars + item_chars > budget:
+            break
+        kept.append(item)
+        total_chars += item_chars
+
+    if len(kept) < len(items):
+        logger.warning(
+            "Dropped %d passages to fit CONTEXT_CHAR_BUDGET (%s)",
+            len(items) - len(kept),
+            budget,
+        )
+    return kept
 
 
 class _Reranker:
@@ -292,7 +325,8 @@ class Retriever:
                 candidates.extend(passages if passages else [result])
 
         candidates.extend(rest)
-        return self._reranker.rerank(query, candidates)
+        reranked = self._reranker.rerank(query, candidates)
+        return _clip_to_char_budget(reranked)
 
     def _fetch_passages_for_result(self, result):
         """Fetch and extract passages for a single search result.

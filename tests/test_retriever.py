@@ -7,7 +7,7 @@ import pytest
 import requests
 from unittest.mock import Mock, patch
 from types import SimpleNamespace
-from src.retriever import Retriever, _Reranker, _split_into_passages
+from src.retriever import Retriever, _Reranker, _split_into_passages, _clip_to_char_budget
 from src.exceptions import SearchError
 
 
@@ -348,6 +348,39 @@ def test_split_into_passages_non_positive_size_falls_back_to_default(mocker):
     assert all(len(p) <= 50 for p in passages)
 
 
+def test_clip_to_char_budget_keeps_items_within_budget():
+    items = [
+        {"title": "A", "content": "x" * 10, "url": "http://a"},
+        {"title": "B", "content": "x" * 10, "url": "http://b"},
+        {"title": "C", "content": "x" * 10, "url": "http://c"},
+    ]
+    kept = _clip_to_char_budget(items, budget=25)
+    assert [item["title"] for item in kept] == ["A", "B"]
+
+
+def test_clip_to_char_budget_always_keeps_at_least_one_item():
+    items = [
+        {"title": "Huge", "content": "x" * 1000, "url": "http://huge"},
+        {"title": "Second", "content": "x" * 1000, "url": "http://second"},
+    ]
+    kept = _clip_to_char_budget(items, budget=10)
+    assert [item["title"] for item in kept] == ["Huge"]
+
+
+def test_clip_to_char_budget_empty_input_returns_empty():
+    assert _clip_to_char_budget([], budget=100) == []
+
+
+def test_clip_to_char_budget_uses_context_char_budget_by_default(mocker):
+    mocker.patch("src.retriever.CONTEXT_CHAR_BUDGET", 15)
+    items = [
+        {"title": "A", "content": "x" * 10, "url": "http://a"},
+        {"title": "B", "content": "x" * 10, "url": "http://b"},
+    ]
+    kept = _clip_to_char_budget(items)
+    assert [item["title"] for item in kept] == ["A"]
+
+
 def test_fetch_page_disabled_skips_fetch(retriever, mocker):
     mocker.patch("src.retriever.FETCH_PAGE_ENABLED", False)
     mocker.patch("src.retriever.RERANKER_ENABLED", False)
@@ -408,3 +441,44 @@ def test_fetch_passages_for_result_skips_invalid_url(retriever):
     assert retriever._fetch_passages_for_result(
         {'title': 'x', 'content': 'y', 'url': 'ftp://bad-scheme'}
     ) is None
+
+
+def test_fetch_and_rerank_passages_clips_to_context_char_budget(retriever, mocker):
+    """The final passage list must fit CONTEXT_CHAR_BUDGET, even when the
+    reranker (disabled here) would otherwise return every passage unpruned.
+    """
+    mocker.patch("src.retriever.RERANKER_ENABLED", False)
+    mocker.patch("src.retriever.FETCH_PAGE_ENABLED", True)
+    mocker.patch("src.retriever.FETCH_PAGE_TOP_N", 2)
+    mocker.patch("src.retriever.PASSAGE_CHARS", 50)
+    mocker.patch("src.retriever.CONTEXT_CHAR_BUDGET", 120)
+    mocker.patch.object(Retriever, "_extract_text", return_value="長い本文です。" * 30)
+    mocker.patch("src.retriever.http_get_text", return_value="<html>dummy</html>")
+
+    results = [
+        {'title': 'A', 'content': 'snippet-a', 'url': 'http://a'},
+        {'title': 'B', 'content': 'snippet-b', 'url': 'http://b'},
+    ]
+    with patch('src.http_client.requests.get', return_value=_mock_search_response(results)):
+        returned = retriever.search_web("test query")
+
+    total_chars = sum(len(r["title"]) + len(r["content"]) for r in returned)
+    assert len(returned) >= 1
+    assert total_chars <= 120 or len(returned) == 1
+
+
+def test_fetch_and_rerank_passages_keeps_single_oversized_passage(retriever, mocker):
+    """A budget smaller than even the first passage must not empty the result."""
+    mocker.patch("src.retriever.RERANKER_ENABLED", False)
+    mocker.patch("src.retriever.FETCH_PAGE_ENABLED", True)
+    mocker.patch("src.retriever.FETCH_PAGE_TOP_N", 1)
+    mocker.patch("src.retriever.PASSAGE_CHARS", 500)
+    mocker.patch("src.retriever.CONTEXT_CHAR_BUDGET", 5)
+    mocker.patch.object(Retriever, "_extract_text", return_value="長い本文です。" * 30)
+    mocker.patch("src.retriever.http_get_text", return_value="<html>dummy</html>")
+
+    results = [{'title': 'A', 'content': 'snippet-a', 'url': 'http://a'}]
+    with patch('src.http_client.requests.get', return_value=_mock_search_response(results)):
+        returned = retriever.search_web("test query")
+
+    assert len(returned) == 1

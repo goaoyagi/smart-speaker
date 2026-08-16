@@ -7,7 +7,7 @@
 2. **[検索準備] query_prep.py**: 検索要否判定と、指示語を含む続き質問のクエリ書き換え（生成前の補助LLM呼び出し。失敗時は元の質問で検索する）。
 3. **[検索] retriever.py**: 質問をトリガーに、ローカルの「SearXNG」でWeb検索を実行（不要ならスキップ）。
 4. **[並べ替え] retriever.py**: 検索結果を日本語Reranker（Optimum/ONNX のクロスエンコーダ）により質問との関連度で並べ替え、上位のみを次段に渡す。
-5. **[本文取得・二段Rerank] retriever.py**: 並べ替え後の上位URLを並列取得し、`trafilatura` で本文抽出（失敗はスニペットへ）。本文は段落・文境界（句点/改行/`！？!?`）を優先しつつ約`PASSAGE_CHARS`字のパッセージに分割し（句読点のない長文は`PASSAGE_CHARS`字で強制的に分割し、1パッセージが上限を超えないようにする）、既存Rerankerで質問との関連度により再度並べ替える。`RERANK_MIN_SCORE`未満のパッセージ・結果は落とす（既定0.0では足切りしない）。`FETCH_PAGE_ENABLED=false`で現行のスニペット経路に戻せる。
+5. **[本文取得・二段Rerank] retriever.py**: 並べ替え後の上位URLを並列取得し、`trafilatura` で本文抽出（失敗はスニペットへ）。本文は段落・文境界（句点/改行/`！？!?`）を優先しつつ約`PASSAGE_CHARS`字のパッセージに分割し（句読点のない長文は`PASSAGE_CHARS`字で強制的に分割し、1パッセージが上限を超えないようにする）、既存Rerankerで質問との関連度により再度並べ替える。`RERANK_MIN_SCORE`未満のパッセージ・結果は落とす（既定0.0では足切りしない）。最終的に残ったパッセージの合計文字数が`CONTEXT_CHAR_BUDGET`を超える場合は関連度の低いものから後ろへ落とす（1件も無くなることはない）。`FETCH_PAGE_ENABLED=false`で現行のスニペット経路に戻せる。
 6. **[構成] composer.py**: 本文取得・Reranking後の検索結果（事実ソース）と質問をプロンプトに編成。
 7. **[脳] brain.py**: プロンプトを Ollama（Qwen2.5:3b）に投入し、事実に基づく回答を生成。
 8. **[口] speaker.py**: `piper-tts-plus` で音声合成して発話。単位や略語の英字は発話前に日本語読みへ正規化する。
@@ -63,6 +63,7 @@
 - 本文取得・抽出の失敗は非致命。その件だけ元のスニペットへ戻し、`logger.warning`を残して処理を続ける（検索全体は`SearchError`にしない）。HTTP取得は`src.http_client.http_get_text`に集約し、`requests`を直接呼ばない。
 - 抽出した本文は約`PASSAGE_CHARS`字のパッセージに分割し、既存Rerankerで質問との関連度により再度並べ替える（モデルの再ロードはしない）。分割は段落（改行）→文（句点・`！？!?`・改行）の順で境界を優先し、句読点のない1文が`PASSAGE_CHARS`字を超える場合はその文自体を`PASSAGE_CHARS`字ずつ強制的にチャンク分割する。1パッセージが上限を超えることは無い。
 - `RERANK_MIN_SCORE`未満のスコアの結果・パッセージは落とす。全件落ちた場合は空リストを返し、composerには「検索結果なし」として渡す。
+- 二段Rerank後の最終パッセージ群は、`title`+`content`の合計文字数が`CONTEXT_CHAR_BUDGET`に収まるよう関連度の低い方（リストの後ろ）から落とす。ただし1件のみで既に上限を超える場合でもその1件は残す（結果を空にしない）。`composer.clip_search_results`（プロンプト構成時のクリップ）とは独立した安全策であり、`FETCH_PAGE_TOP_N`件×`PASSAGE_CHARS`字の細かいパッセージが多数になっても、retriever が返す時点で総量を有限に保つ。
 - `FETCH_PAGE_ENABLED=false`で本文取得をスキップし、現行のスニペット経路に戻せること。
 
 ### composer.py (プロンプト構成)
