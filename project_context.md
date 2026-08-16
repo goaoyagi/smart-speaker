@@ -6,13 +6,15 @@
 1. **[耳] listener.py**: Whisper.cpp でユーザーの音声をテキスト化。
 2. **[検索準備] query_prep.py**: 検索要否判定と、指示語を含む続き質問のクエリ書き換え（生成前の補助LLM呼び出し。失敗時は元の質問で検索する）。
 3. **[検索] retriever.py**: 質問をトリガーに、ローカルの「SearXNG」でWeb検索を実行（不要ならスキップ）。
-4. **[並べ替え] retriever.py**: 検索結果を日本語Reranker（Optimum/ONNX のクロスエンコーダ）により質問との関連度で並べ替え、上位のみを次段に渡す。
-5. **[構成] composer.py**: Reranking後の検索結果（事実ソース）と質問をプロンプトに編成。
-6. **[脳] brain.py**: プロンプトを Ollama（Qwen2.5:3b）に投入し、事実に基づく回答を生成。
-7. **[口] speaker.py**: `piper-tts-plus` で音声合成して発話。単位や略語の英字は発話前に日本語読みへ正規化する。
-8. **[視覚] status_led.py**: GPIO接続のLEDで、待機・聞き取り・検索・思考・発話・エラーの各状態を表示。
-9. **[操作] push_to_talk.py**: GPIO接続のボタンを押している間だけ録音するプッシュ・トゥ・トーク。
-10. **[記憶] conversation_history.py**: 直近N回の「問いと答え」を保持し、再復唱と文脈を踏まえた深掘り質問に対応。
+4. **[並べ替え] retriever.py**: 検索結果を日本語Reranker（Optimum/ONNX のクロスエンコーダ）で質問との関連度順に並べ替える。
+5. **[本文取得] retriever.py**: 上位URLの本文を取得し、抽出失敗時は元のスニペットへフォールバックする。
+6. **[再並べ替え] retriever.py**: 抽出本文をパッセージ分割し、日本語Rerankerで質問との関連度順に再並べ替える。
+7. **[構成] composer.py**: Reranking後の検索結果（事実ソース）と質問をプロンプトに編成。
+8. **[脳] brain.py**: プロンプトを Ollama（Qwen2.5:3b）に投入し、事実に基づく回答を生成。
+9. **[口] speaker.py**: `piper-tts-plus` で音声合成して発話。単位や略語の英字は発話前に日本語読みへ正規化する。
+10. **[視覚] status_led.py**: GPIO接続のLEDで、待機・聞き取り・検索・思考・発話・エラーの各状態を表示。
+11. **[操作] push_to_talk.py**: GPIO接続のボタンを押している間だけ録音するプッシュ・トゥ・トーク。
+12. **[記憶] conversation_history.py**: 直近N回の「問いと答え」を保持し、再復唱と文脈を踏まえた深掘り質問に対応。
 
 ## 2. 必要依存ライブラリ
 **依存の正は `pyproject.toml`**。以下は用途の説明であり、追加・変更時は `pyproject.toml` と `README.md` のセットアップ手順もあわせて更新すること。
@@ -28,6 +30,7 @@
 - **requests** : SearXNGサーバーおよびOllamaローカルAPIとの通信用
 - **optimum[onnxruntime]** : Reranking用ONNXモデルの実行基盤
 - **transformers** : Rerankingモデルのトークナイズおよび推論
+- **trafilatura** : Webページ本文の抽出
 - **fugashi / unidic-lite** : 日本語テキストの形態素解析
 
 ### Raspberry Pi でのみ必要（`pyproject.toml` の `pi` extra）
@@ -51,8 +54,11 @@
 
 ### retriever.py (Reranking)
 - Reranking を標準フローの一部（既定で有効）とし、生成前RAGの処理順序（検索 → Reranking → プロンプト構成 → 生成）を崩さないこと。
+- 本文取得を有効にした場合は、結果Rerankingの後に「本文取得 → パッセージ再Reranking」を行い、失敗時はその段をスキップして degrade すること。
 - `optimum` / `transformers` は動的インポート（使用直前に import し、`ImportError` を捕捉）すること。起動時の依存不足による失敗を避け、フォールバックできるようにする。
+- 本文抽出の `trafilatura` も動的インポート（使用直前に import）し、依存不足や抽出失敗は非致命としてスニペットへフォールバックすること。
 - 依存ライブラリやモデルのロード・推論に失敗した場合は Reranking をスキップして検索結果をそのまま返し、検索処理自体は継続すること（Reranking の失敗を非致命とする）。
+- `RERANK_MIN_SCORE` 未満の結果・パッセージは除外する。閾値適用後に0件なら空リストを返し、composer は検索結果なし経路で処理する。
 - ユニットテストではモデルをダウンロード・ロードしない。Reranking を無効化するか、Reranker を `pytest-mock` でモック化し、
   オフライン（外部アクセス禁止）のテスト方針を守ること。
 
