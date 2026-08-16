@@ -6,8 +6,8 @@
 
 1. **[耳] listener.py**: Whisper.cpp でユーザーの音声をテキスト化
 2. **[検索準備] query_prep.py**: 検索要否判定と、指示語を含む続き質問のクエリ書き換え（生成前の補助LLM呼び出し。失敗時は元の質問で検索）
-3. **[検索] retriever.py**: 質問をトリガーに、ローカルの「SearXNG」でWeb検索を実行（不要ならスキップ）
-4. **[並べ替え] retriever.py**: 日本語Reranker（Optimum/ONNX のクロスエンコーダ）で検索結果を質問との関連度順に並べ替え
+3. **[検索] retriever.py**: 質問をトリガーに、ローカルの「SearXNG」でWeb検索を実行（不要ならスキップ）。Rerank 上位 URL の本文を取得する
+4. **[並べ替え] retriever.py**: 日本語Reranker（Optimum/ONNX のクロスエンコーダ）で検索結果を並べ替えたあと、本文パッセージを二段 Rerank する
 5. **[構成] composer.py**: Reranking後の検索結果（事実ソース）と質問をプロンプトに編成
 6. **[脳] brain.py**: プロンプトを Ollama（Qwen2.5:3b）に投入し、事実に基づく回答を生成
 7. **[口] speaker.py**: `piper-tts-plus` で音声合成して発話
@@ -216,7 +216,7 @@ smart-speaker/
 ## 注意点
 
 - **speaker.py**: 本家Piper（espeak-ng依存）は日本語のアクセント解析が未対応のため、必ず `piper-tts-plus` を使用すること
-- **retriever.py（Reranking）**: 標準構成として既定で有効。依存ライブラリ未導入時や処理に失敗した場合は自動的にスキップされ、検索結果をそのまま使用する
+- **retriever.py（Reranking / 本文取得）**: 標準構成として既定で有効。結果 Rerank のあと、上位ページの本文を `trafilatura` で抽出し、パッセージを同じクロスエンコーダで再ランクする。依存ライブラリ未導入時や処理に失敗した場合はスニペットまたは取得済み本文へ戻し、検索自体は継続する。`FETCH_PAGE_ENABLED=false` で従来のスニペット経路に戻せる
 - **status_led.py**: `gpiozero` は Raspberry Pi 上でのみ動作するため、非Pi環境では自動的に無効化される
 - **composer.py**: 本番経路は `compose_messages()`。日本語限定と、質問タイプに合わせた文数（事実は1〜3文、説明は3〜5文、結論先出し）は system メッセージに集約する。検索結果は質問に関係するものだけを事実として扱い、無関係なら使わず、使う場合は推測で補わない。発話に「検索結果」とは言わない。`compose_prompt()` は切り戻し用に残す
 - **query_prep.py**: 最終回答の前に、検索要否と検索クエリ書き換えを1回の補助LLM呼び出しで行う。失敗時は元の質問で検索する。結果は発話しない

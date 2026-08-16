@@ -5,8 +5,8 @@
 
 1. **[耳] listener.py**: Whisper.cpp でユーザーの音声をテキスト化。
 2. **[検索準備] query_prep.py**: 検索要否判定と、指示語を含む続き質問のクエリ書き換え（生成前の補助LLM呼び出し。失敗時は元の質問で検索する）。
-3. **[検索] retriever.py**: 質問をトリガーに、ローカルの「SearXNG」でWeb検索を実行（不要ならスキップ）。
-4. **[並べ替え] retriever.py**: 検索結果を日本語Reranker（Optimum/ONNX のクロスエンコーダ）により質問との関連度で並べ替え、上位のみを次段に渡す。
+3. **[検索] retriever.py**: 質問をトリガーに、ローカルの「SearXNG」でWeb検索を実行（不要ならスキップ）。Rerank 上位 URL の本文を並列取得し、`trafilatura` で抽出する。
+4. **[並べ替え] retriever.py**: 検索結果を日本語Reranker（Optimum/ONNX のクロスエンコーダ）により質問との関連度で並べ替えたあと、本文をパッセージに分割して同じモデルで二段 Rerank する。
 5. **[構成] composer.py**: Reranking後の検索結果（事実ソース）と質問をプロンプトに編成。
 6. **[脳] brain.py**: プロンプトを Ollama（Qwen2.5:3b）に投入し、事実に基づく回答を生成。
 7. **[口] speaker.py**: `piper-tts-plus` で音声合成して発話。単位や略語の英字は発話前に日本語読みへ正規化する。
@@ -29,6 +29,7 @@
 - **optimum[onnxruntime]** : Reranking用ONNXモデルの実行基盤
 - **transformers** : Rerankingモデルのトークナイズおよび推論
 - **fugashi / unidic-lite** : 日本語テキストの形態素解析
+- **trafilatura** : 検索結果ページの本文抽出
 
 ### Raspberry Pi でのみ必要（`pyproject.toml` の `pi` extra）
 - **gpiozero** : ステータスLEDとプッシュ・トゥ・トークボタンのGPIO制御。非Pi環境では不在を検知して自動的に無効化される
@@ -49,11 +50,13 @@
 - `prompt[:10000]` の文字切り捨ては使わない。検索コンテキストは `CONTEXT_CHAR_BUDGET`（既定2000字）に収まるよう検索結果単位で後ろから落とし、messages 全体の概算トークンが `OLLAMA_NUM_CTX - OLLAMA_NUM_PREDICT` を超える場合は古い履歴ターンから落とす。system と最後の user メッセージは落とさない。
 - 文字列を渡す旧 `generate_response(prompt)` 経路は残し、`main.py` から `compose_prompt` へ切り戻せるようにする。
 
-### retriever.py (Reranking)
-- Reranking を標準フローの一部（既定で有効）とし、生成前RAGの処理順序（検索 → Reranking → プロンプト構成 → 生成）を崩さないこと。
-- `optimum` / `transformers` は動的インポート（使用直前に import し、`ImportError` を捕捉）すること。起動時の依存不足による失敗を避け、フォールバックできるようにする。
+### retriever.py (Reranking / 本文取得)
+- Reranking を標準フローの一部（既定で有効）とし、生成前RAGの処理順序（検索 → Reranking → 本文取得 → パッセージ再ランク → プロンプト構成 → 生成）を崩さないこと。
+- `optimum` / `transformers` / `trafilatura` は動的インポート（使用直前に import し、`ImportError` を捕捉）すること。起動時の依存不足による失敗を避け、フォールバックできるようにする。
 - 依存ライブラリやモデルのロード・推論に失敗した場合は Reranking をスキップして検索結果をそのまま返し、検索処理自体は継続すること（Reranking の失敗を非致命とする）。
-- ユニットテストではモデルをダウンロード・ロードしない。Reranking を無効化するか、Reranker を `pytest-mock` でモック化し、
+- 本文取得・抽出・二段 Rerank の失敗も非致命。失敗した URL だけスニペットへ戻し、二段 Rerank が失敗したら取得できた本文（または元スニペット）を返す。検索全体は止めない。
+- クロスエンコーダのスコアが `RERANK_MIN_SCORE`（既定 0.0）未満の結果・パッセージは落とす。残った件が0件なら空の検索結果を渡す。
+- ユニットテストではモデルをダウンロード・ロードせず、実ページにもアクセスしない。Reranking を無効化するか、Reranker と `trafilatura` を `pytest-mock` でモック化し、
   オフライン（外部アクセス禁止）のテスト方針を守ること。
 
 ### composer.py (プロンプト構成)
