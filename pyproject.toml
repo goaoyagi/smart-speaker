@@ -18,6 +18,7 @@ dependencies = [
     "piper-tts-plus",  # 日本語特化 TTS（speaker.py）。本家 piper は使わない
     "optimum[onnxruntime]",  # Reranking 用 ONNX 実行基盤（retriever.py）
     "transformers",    # Reranking モデルのトークナイズ・推論
+    "trafilatura",     # Web ページの本文抽出（retriever.py）
     "fugashi",         # 日本語形態素解析
     "unidic-lite",     # fugashi 用辞書
 ]
