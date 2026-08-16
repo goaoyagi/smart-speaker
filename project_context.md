@@ -7,12 +7,13 @@
 2. **[検索準備] query_prep.py**: 検索要否判定と、指示語を含む続き質問のクエリ書き換え（生成前の補助LLM呼び出し。失敗時は元の質問で検索する）。
 3. **[検索] retriever.py**: 質問をトリガーに、ローカルの「SearXNG」でWeb検索を実行（不要ならスキップ）。
 4. **[並べ替え] retriever.py**: 検索結果を日本語Reranker（Optimum/ONNX のクロスエンコーダ）により質問との関連度で並べ替え、上位のみを次段に渡す。
-5. **[構成] composer.py**: Reranking後の検索結果（事実ソース）と質問をプロンプトに編成。
-6. **[脳] brain.py**: プロンプトを Ollama（Qwen2.5:3b）に投入し、事実に基づく回答を生成。
-7. **[口] speaker.py**: `piper-tts-plus` で音声合成して発話。単位や略語の英字は発話前に日本語読みへ正規化する。
-8. **[視覚] status_led.py**: GPIO接続のLEDで、待機・聞き取り・検索・思考・発話・エラーの各状態を表示。
-9. **[操作] push_to_talk.py**: GPIO接続のボタンを押している間だけ録音するプッシュ・トゥ・トーク。
-10. **[記憶] conversation_history.py**: 直近N回の「問いと答え」を保持し、再復唱と文脈を踏まえた深掘り質問に対応。
+5. **[本文取得・二段Rerank] retriever.py**: 並べ替え後の上位URLを並列取得し、`trafilatura` で本文抽出（失敗はスニペットへ）。本文を約`PASSAGE_CHARS`字のパッセージに分割し、既存Rerankerで質問との関連度により再度並べ替える。`RERANK_MIN_SCORE`未満のパッセージ・結果は落とす（既定0.0では足切りしない）。`FETCH_PAGE_ENABLED=false`で現行のスニペット経路に戻せる。
+6. **[構成] composer.py**: 本文取得・Reranking後の検索結果（事実ソース）と質問をプロンプトに編成。
+7. **[脳] brain.py**: プロンプトを Ollama（Qwen2.5:3b）に投入し、事実に基づく回答を生成。
+8. **[口] speaker.py**: `piper-tts-plus` で音声合成して発話。単位や略語の英字は発話前に日本語読みへ正規化する。
+9. **[視覚] status_led.py**: GPIO接続のLEDで、待機・聞き取り・検索・思考・発話・エラーの各状態を表示。
+10. **[操作] push_to_talk.py**: GPIO接続のボタンを押している間だけ録音するプッシュ・トゥ・トーク。
+11. **[記憶] conversation_history.py**: 直近N回の「問いと答え」を保持し、再復唱と文脈を踏まえた深掘り質問に対応。
 
 ## 2. 必要依存ライブラリ
 **依存の正は `pyproject.toml`**。以下は用途の説明であり、追加・変更時は `pyproject.toml` と `README.md` のセットアップ手順もあわせて更新すること。
@@ -29,6 +30,7 @@
 - **optimum[onnxruntime]** : Reranking用ONNXモデルの実行基盤
 - **transformers** : Rerankingモデルのトークナイズおよび推論
 - **fugashi / unidic-lite** : 日本語テキストの形態素解析
+- **trafilatura** : 検索結果ページのHTML本文抽出（retriever.py）
 
 ### Raspberry Pi でのみ必要（`pyproject.toml` の `pi` extra）
 - **gpiozero** : ステータスLEDとプッシュ・トゥ・トークボタンのGPIO制御。非Pi環境では不在を検知して自動的に無効化される
@@ -55,6 +57,13 @@
 - 依存ライブラリやモデルのロード・推論に失敗した場合は Reranking をスキップして検索結果をそのまま返し、検索処理自体は継続すること（Reranking の失敗を非致命とする）。
 - ユニットテストではモデルをダウンロード・ロードしない。Reranking を無効化するか、Reranker を `pytest-mock` でモック化し、
   オフライン（外部アクセス禁止）のテスト方針を守ること。
+
+### retriever.py (本文取得・二段Rerank)
+- `FETCH_PAGE_ENABLED=true`（既定）のとき、結果単位Rerank後の上位`FETCH_PAGE_TOP_N`件のURLを並列取得し、`trafilatura`で本文抽出する。`trafilatura`も動的インポートにすること。
+- 本文取得・抽出の失敗は非致命。その件だけ元のスニペットへ戻し、`logger.warning`を残して処理を続ける（検索全体は`SearchError`にしない）。HTTP取得は`src.http_client.http_get_text`に集約し、`requests`を直接呼ばない。
+- 抽出した本文は約`PASSAGE_CHARS`字のパッセージに分割し、既存Rerankerで質問との関連度により再度並べ替える（モデルの再ロードはしない）。
+- `RERANK_MIN_SCORE`未満のスコアの結果・パッセージは落とす。全件落ちた場合は空リストを返し、composerには「検索結果なし」として渡す。
+- `FETCH_PAGE_ENABLED=false`で本文取得をスキップし、現行のスニペット経路に戻せること。
 
 ### composer.py (プロンプト構成)
 - 本番経路は `compose_messages()`。フェーズ2で確定した指示は system メッセージに集約する。

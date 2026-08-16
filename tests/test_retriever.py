@@ -7,7 +7,7 @@ import pytest
 import requests
 from unittest.mock import Mock, patch
 from types import SimpleNamespace
-from src.retriever import Retriever, _Reranker
+from src.retriever import Retriever, _Reranker, _split_into_passages
 from src.exceptions import SearchError
 
 
@@ -30,8 +30,9 @@ def test_retriever_initialization(retriever):
     assert isinstance(retriever._reranker, _Reranker)
 
 
-def test_search_web_success(retriever):
+def test_search_web_success(retriever, mocker):
     """Test successful web search"""
+    mocker.patch("src.retriever.FETCH_PAGE_ENABLED", False)
     mock_response = Mock()
     mock_response.json.return_value = {
         'results': [
@@ -64,6 +65,7 @@ def test_search_web_timeout(retriever):
 
 
 def test_search_web_reranks_and_truncates(retriever, mocker):
+    mocker.patch("src.retriever.FETCH_PAGE_ENABLED", False)
     mocker.patch("src.retriever.RERANK_TOP_K", 2)
     mocker.patch.object(retriever._reranker, "_load")
     retriever._reranker._tokenizer = Mock(return_value={"input_ids": Mock()})
@@ -85,6 +87,7 @@ def test_search_web_reranks_and_truncates(retriever, mocker):
 
 
 def test_search_web_reranks_when_top_k_equals_result_count(retriever, mocker):
+    mocker.patch("src.retriever.FETCH_PAGE_ENABLED", False)
     mocker.patch("src.retriever.RERANK_TOP_K", 3)
     mocker.patch.object(retriever._reranker, "_load")
     retriever._reranker._tokenizer = Mock(return_value={"input_ids": Mock()})
@@ -104,6 +107,7 @@ def test_search_web_reranks_when_top_k_equals_result_count(retriever, mocker):
 
 
 def test_search_web_top_k_zero_ranks_without_truncating(retriever, mocker):
+    mocker.patch("src.retriever.FETCH_PAGE_ENABLED", False)
     mocker.patch("src.retriever.RERANK_TOP_K", 0)
     mocker.patch.object(retriever._reranker, "_load")
     retriever._reranker._tokenizer = Mock(return_value={"input_ids": Mock()})
@@ -123,6 +127,7 @@ def test_search_web_top_k_zero_ranks_without_truncating(retriever, mocker):
 
 
 def test_search_web_reranking_disabled(retriever, mocker):
+    mocker.patch("src.retriever.FETCH_PAGE_ENABLED", False)
     mocker.patch("src.retriever.RERANKER_ENABLED", False)
     load = mocker.patch.object(retriever._reranker, "_load")
     results = [
@@ -139,6 +144,7 @@ def test_search_web_reranking_disabled(retriever, mocker):
 
 
 def test_search_web_import_error_falls_back_permanently(retriever, mocker):
+    mocker.patch("src.retriever.FETCH_PAGE_ENABLED", False)
     load = mocker.patch.object(
         retriever._reranker, "_load", side_effect=ImportError("missing optimum")
     )
@@ -159,6 +165,7 @@ def test_search_web_import_error_falls_back_permanently(retriever, mocker):
 
 
 def test_search_web_inference_failure_falls_back_permanently(retriever, mocker):
+    mocker.patch("src.retriever.FETCH_PAGE_ENABLED", False)
     mocker.patch.object(retriever._reranker, "_load")
     retriever._reranker._tokenizer = Mock(return_value={"input_ids": Mock()})
     retriever._reranker._model = Mock(side_effect=RuntimeError("inference failed"))
@@ -186,6 +193,7 @@ def test_search_web_empty_results_skips_reranking(retriever, mocker):
 
 
 def test_search_web_respects_candidate_limit(retriever, mocker):
+    mocker.patch("src.retriever.FETCH_PAGE_ENABLED", False)
     mocker.patch("src.retriever.RERANKER_ENABLED", False)
     mocker.patch("src.retriever.SEARCH_CANDIDATE_LIMIT", 2)
     results = [
@@ -253,3 +261,108 @@ def test_scores_absorbs_torch_like_tensor():
 
     logits = _FakeTensor([[0.1], [0.9]])
     assert _Reranker._scores(logits) == [0.1, 0.9]
+
+
+def test_rerank_min_score_filters_low_scores(mocker):
+    reranker = _Reranker()
+    mocker.patch.object(reranker, "_load")
+    reranker._tokenizer = Mock(return_value={"input_ids": Mock()})
+    reranker._model = Mock(return_value=SimpleNamespace(logits=[[0.1], [0.9], [-0.2]]))
+
+    results = [
+        {'title': 'Low', 'content': 'low', 'url': 'http://low'},
+        {'title': 'High', 'content': 'high', 'url': 'http://high'},
+        {'title': 'Neg', 'content': 'neg', 'url': 'http://neg'},
+    ]
+    ranked = reranker.rerank("test query", results, top_k=0, min_score=0.0)
+    assert [r['title'] for r in ranked] == ['High', 'Low']
+
+
+def test_rerank_min_score_all_filtered_returns_empty(mocker):
+    reranker = _Reranker()
+    mocker.patch.object(reranker, "_load")
+    reranker._tokenizer = Mock(return_value={"input_ids": Mock()})
+    reranker._model = Mock(return_value=SimpleNamespace(logits=[[0.1], [0.2]]))
+
+    results = [
+        {'title': 'A', 'content': 'a', 'url': 'http://a'},
+        {'title': 'B', 'content': 'b', 'url': 'http://b'},
+    ]
+    ranked = reranker.rerank("test query", results, top_k=0, min_score=0.5)
+    assert ranked == []
+
+
+def test_split_into_passages_respects_size_and_boundaries():
+    text = "あ" * 100 + "。" + "い" * 100 + "。" + "う" * 100 + "。"
+    passages = _split_into_passages(text, 150)
+    assert len(passages) >= 2
+    assert "".join(passages).replace("", "") != ""
+    for passage in passages:
+        assert passage
+
+
+def test_split_into_passages_empty_returns_empty_list():
+    assert _split_into_passages("", 250) == []
+    assert _split_into_passages(None, 250) == []
+
+
+def test_fetch_page_disabled_skips_fetch(retriever, mocker):
+    mocker.patch("src.retriever.FETCH_PAGE_ENABLED", False)
+    mocker.patch("src.retriever.RERANKER_ENABLED", False)
+    fetch = mocker.patch.object(retriever, "_fetch_passages_for_result")
+    results = [{'title': 'A', 'content': 'a', 'url': 'http://a'}]
+    with patch('src.http_client.requests.get', return_value=_mock_search_response(results)):
+        returned = retriever.search_web("test query")
+
+    assert returned == results
+    fetch.assert_not_called()
+
+
+def test_fetch_and_rerank_passages_uses_extracted_text(retriever, mocker):
+    mocker.patch("src.retriever.RERANKER_ENABLED", False)
+    mocker.patch("src.retriever.FETCH_PAGE_ENABLED", True)
+    mocker.patch("src.retriever.FETCH_PAGE_TOP_N", 2)
+    mocker.patch.object(Retriever, "_extract_text", return_value="本文" * 200)
+    mocker.patch("src.retriever.http_get_text", return_value="<html>dummy</html>")
+
+    results = [
+        {'title': 'A', 'content': 'snippet-a', 'url': 'http://a'},
+        {'title': 'B', 'content': 'snippet-b', 'url': 'http://b'},
+    ]
+    with patch('src.http_client.requests.get', return_value=_mock_search_response(results)):
+        returned = retriever.search_web("test query")
+
+    assert len(returned) > 0
+    assert all(r['content'] not in ('snippet-a', 'snippet-b') for r in returned)
+    assert all(r['url'] in ('http://a', 'http://b') for r in returned)
+
+
+def test_fetch_partial_failure_falls_back_to_snippet(retriever, mocker):
+    mocker.patch("src.retriever.RERANKER_ENABLED", False)
+    mocker.patch("src.retriever.FETCH_PAGE_ENABLED", True)
+    mocker.patch("src.retriever.FETCH_PAGE_TOP_N", 2)
+
+    def fake_get_text(url, *args, **kwargs):
+        if url == 'http://bad':
+            raise SearchError("boom")
+        return "<html>good</html>"
+
+    mocker.patch("src.retriever.http_get_text", side_effect=fake_get_text)
+    mocker.patch.object(Retriever, "_extract_text", return_value="本文" * 200)
+
+    results = [
+        {'title': 'Bad', 'content': 'bad-snippet', 'url': 'http://bad'},
+        {'title': 'Good', 'content': 'good-snippet', 'url': 'http://good'},
+    ]
+    with patch('src.http_client.requests.get', return_value=_mock_search_response(results)):
+        returned = retriever.search_web("test query")
+
+    assert any(r['url'] == 'http://bad' and r['content'] == 'bad-snippet' for r in returned)
+    assert any(r['url'] == 'http://good' and r['content'] != 'good-snippet' for r in returned)
+
+
+def test_fetch_passages_for_result_skips_invalid_url(retriever):
+    assert retriever._fetch_passages_for_result({'title': 'x', 'content': 'y', 'url': ''}) is None
+    assert retriever._fetch_passages_for_result(
+        {'title': 'x', 'content': 'y', 'url': 'ftp://bad-scheme'}
+    ) is None
