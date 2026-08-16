@@ -20,6 +20,7 @@ dependencies = [
     "transformers",    # Reranking モデルのトークナイズ・推論
     "fugashi",         # 日本語形態素解析
     "unidic-lite",     # fugashi 用辞書
+    "trafilatura",     # 検索結果ページの本文抽出（retriever.py）
 ]
 
 [project.optional-dependencies]

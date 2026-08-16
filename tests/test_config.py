@@ -24,6 +24,11 @@ def test_default_config_values():
     )
     assert config.RERANKER_LOCAL_PATH == "./models/reranker"
     assert config.RERANK_TOP_K == 3
+    assert config.RERANK_MIN_SCORE == 0.0
+    assert config.FETCH_PAGE_ENABLED is True
+    assert config.FETCH_PAGE_TOP_N == 3
+    assert config.FETCH_PAGE_TIMEOUT == 3
+    assert config.PASSAGE_CHARS == 250
     assert config.OLLAMA_API_URL == "http://localhost:11434/api/chat"
     assert config.OLLAMA_MODEL == "qwen2.5:3b"
     assert config.OLLAMA_NUM_CTX == 8192
@@ -79,6 +84,11 @@ def test_config_reads_environment(monkeypatch):
     monkeypatch.setenv("RERANK_TOP_K", "5")
     monkeypatch.setenv("RERANKER_LOCAL_PATH", "./models/custom-reranker")
     monkeypatch.setenv("SEARCH_CANDIDATE_LIMIT", "7")
+    monkeypatch.setenv("RERANK_MIN_SCORE", "0.3")
+    monkeypatch.setenv("FETCH_PAGE_ENABLED", "false")
+    monkeypatch.setenv("FETCH_PAGE_TOP_N", "5")
+    monkeypatch.setenv("FETCH_PAGE_TIMEOUT", "5")
+    monkeypatch.setenv("PASSAGE_CHARS", "300")
     monkeypatch.setenv("CONTEXT_CHAR_BUDGET", "1500")
     monkeypatch.setenv("CHAR_TO_TOKEN_RATIO", "0.7")
     monkeypatch.setenv("CONVERSATION_MAX_TURNS", "4")
@@ -108,6 +118,11 @@ def test_config_reads_environment(monkeypatch):
     assert src.config.RERANK_TOP_K == 5
     assert src.config.RERANKER_LOCAL_PATH == "./models/custom-reranker"
     assert src.config.SEARCH_CANDIDATE_LIMIT == 7
+    assert src.config.RERANK_MIN_SCORE == 0.3
+    assert src.config.FETCH_PAGE_ENABLED is False
+    assert src.config.FETCH_PAGE_TOP_N == 5
+    assert src.config.FETCH_PAGE_TIMEOUT == 5
+    assert src.config.PASSAGE_CHARS == 300
 
     # Reset
     monkeypatch.delenv("SEARXNG_URL")
@@ -121,6 +136,11 @@ def test_config_reads_environment(monkeypatch):
     monkeypatch.delenv("RERANK_TOP_K")
     monkeypatch.delenv("RERANKER_LOCAL_PATH")
     monkeypatch.delenv("SEARCH_CANDIDATE_LIMIT")
+    monkeypatch.delenv("RERANK_MIN_SCORE")
+    monkeypatch.delenv("FETCH_PAGE_ENABLED")
+    monkeypatch.delenv("FETCH_PAGE_TOP_N")
+    monkeypatch.delenv("FETCH_PAGE_TIMEOUT")
+    monkeypatch.delenv("PASSAGE_CHARS")
     monkeypatch.delenv("CONTEXT_CHAR_BUDGET")
     monkeypatch.delenv("CHAR_TO_TOKEN_RATIO")
     monkeypatch.delenv("CONVERSATION_MAX_TURNS")

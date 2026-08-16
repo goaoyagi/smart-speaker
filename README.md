@@ -8,12 +8,13 @@
 2. **[検索準備] query_prep.py**: 検索要否判定と、指示語を含む続き質問のクエリ書き換え（生成前の補助LLM呼び出し。失敗時は元の質問で検索）
 3. **[検索] retriever.py**: 質問をトリガーに、ローカルの「SearXNG」でWeb検索を実行（不要ならスキップ）
 4. **[並べ替え] retriever.py**: 日本語Reranker（Optimum/ONNX のクロスエンコーダ）で検索結果を質問との関連度順に並べ替え
-5. **[構成] composer.py**: Reranking後の検索結果（事実ソース）と質問をプロンプトに編成
-6. **[脳] brain.py**: プロンプトを Ollama（Qwen2.5:3b）に投入し、事実に基づく回答を生成
-7. **[口] speaker.py**: `piper-tts-plus` で音声合成して発話
-8. **[視覚] status_led.py**: GPIO接続のLEDで、待機・聞き取り・検索・思考・発話・エラーを表示
-9. **[操作] push_to_talk.py**: GPIO接続のボタンを押している間だけ録音するプッシュ・トゥ・トーク
-10. **[記憶] conversation_history.py**: 直近N回の問いと答えを保持し、再復唱と文脈を踏まえた深掘り質問に対応
+5. **[本文取得・二段Rerank] retriever.py**: 上位URLを並列取得し `trafilatura` で本文抽出（失敗はスニペットへ）。本文を段落・文境界を優先しつつパッセージに分割し（句読点の無い長文は強制分割）、Rerankerで再度並べ替え。最終パッセージの合計文字数は `CONTEXT_CHAR_BUDGET` に収まるよう関連度の低い方から間引く
+6. **[構成] composer.py**: 本文取得・Reranking後の検索結果（事実ソース）と質問をプロンプトに編成
+7. **[脳] brain.py**: プロンプトを Ollama（Qwen2.5:3b）に投入し、事実に基づく回答を生成
+8. **[口] speaker.py**: `piper-tts-plus` で音声合成して発話
+9. **[視覚] status_led.py**: GPIO接続のLEDで、待機・聞き取り・検索・思考・発話・エラーを表示
+10. **[操作] push_to_talk.py**: GPIO接続のボタンを押している間だけ録音するプッシュ・トゥ・トーク
+11. **[記憶] conversation_history.py**: 直近N回の問いと答えを保持し、再復唱と文脈を踏まえた深掘り質問に対応
 
 ## 必要依存ライブラリ
 
@@ -217,6 +218,7 @@ smart-speaker/
 
 - **speaker.py**: 本家Piper（espeak-ng依存）は日本語のアクセント解析が未対応のため、必ず `piper-tts-plus` を使用すること
 - **retriever.py（Reranking）**: 標準構成として既定で有効。依存ライブラリ未導入時や処理に失敗した場合は自動的にスキップされ、検索結果をそのまま使用する
+- **retriever.py（本文取得・二段Rerank）**: `FETCH_PAGE_ENABLED=true`（既定）で、Rerank上位URLを並列取得し`trafilatura`で本文抽出、パッセージ単位で再度Rerankする。パッセージ分割は段落→文境界（句点・`！？!?`・改行）を優先し、境界のない長文は`PASSAGE_CHARS`字ずつ強制分割することで1パッセージが上限を超えないようにする。取得・抽出に失敗した件は元のスニペットへ戻り、検索処理自体は継続する。二段Rerank後は`title`+`content`の合計文字数が`CONTEXT_CHAR_BUDGET`を超えないよう関連度の低いパッセージから間引く（1件も無くなることはない）。`FETCH_PAGE_ENABLED=false`で現行のスニペット経路に戻せる
 - **status_led.py**: `gpiozero` は Raspberry Pi 上でのみ動作するため、非Pi環境では自動的に無効化される
 - **composer.py**: 本番経路は `compose_messages()`。日本語限定と、質問タイプに合わせた文数（事実は1〜3文、説明は3〜5文、結論先出し）は system メッセージに集約する。検索結果は質問に関係するものだけを事実として扱い、無関係なら使わず、使う場合は推測で補わない。発話に「検索結果」とは言わない。`compose_prompt()` は切り戻し用に残す
 - **query_prep.py**: 最終回答の前に、検索要否と検索クエリ書き換えを1回の補助LLM呼び出しで行う。失敗時は元の質問で検索する。結果は発話しない
