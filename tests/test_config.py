@@ -24,6 +24,11 @@ def test_default_config_values():
     )
     assert config.RERANKER_LOCAL_PATH == "./models/reranker"
     assert config.RERANK_TOP_K == 3
+    assert config.FETCH_PAGE_ENABLED is True
+    assert config.FETCH_PAGE_TOP_N == 3
+    assert config.FETCH_PAGE_TIMEOUT == 3
+    assert config.PASSAGE_CHARS == 250
+    assert config.RERANK_MIN_SCORE == 0.0
     assert config.OLLAMA_API_URL == "http://localhost:11434/api/chat"
     assert config.OLLAMA_MODEL == "qwen2.5:3b"
     assert config.OLLAMA_NUM_CTX == 8192
@@ -86,6 +91,11 @@ def test_config_reads_environment(monkeypatch):
     monkeypatch.setenv("QUERY_PREP_ENABLED", "false")
     monkeypatch.setenv("OLLAMA_AUX_NUM_PREDICT", "32")
     monkeypatch.setenv("OLLAMA_AUX_TEMPERATURE", "0.2")
+    monkeypatch.setenv("FETCH_PAGE_ENABLED", "false")
+    monkeypatch.setenv("FETCH_PAGE_TOP_N", "5")
+    monkeypatch.setenv("FETCH_PAGE_TIMEOUT", "5")
+    monkeypatch.setenv("PASSAGE_CHARS", "500")
+    monkeypatch.setenv("RERANK_MIN_SCORE", "0.5")
 
     import src.config
     importlib.reload(src.config)
@@ -108,6 +118,11 @@ def test_config_reads_environment(monkeypatch):
     assert src.config.RERANK_TOP_K == 5
     assert src.config.RERANKER_LOCAL_PATH == "./models/custom-reranker"
     assert src.config.SEARCH_CANDIDATE_LIMIT == 7
+    assert src.config.FETCH_PAGE_ENABLED is False
+    assert src.config.FETCH_PAGE_TOP_N == 5
+    assert src.config.FETCH_PAGE_TIMEOUT == 5
+    assert src.config.PASSAGE_CHARS == 500
+    assert src.config.RERANK_MIN_SCORE == 0.5
 
     # Reset
     monkeypatch.delenv("SEARXNG_URL")
@@ -128,6 +143,11 @@ def test_config_reads_environment(monkeypatch):
     monkeypatch.delenv("QUERY_PREP_ENABLED")
     monkeypatch.delenv("OLLAMA_AUX_NUM_PREDICT")
     monkeypatch.delenv("OLLAMA_AUX_TEMPERATURE")
+    monkeypatch.delenv("FETCH_PAGE_ENABLED")
+    monkeypatch.delenv("FETCH_PAGE_TOP_N")
+    monkeypatch.delenv("FETCH_PAGE_TIMEOUT")
+    monkeypatch.delenv("PASSAGE_CHARS")
+    monkeypatch.delenv("RERANK_MIN_SCORE")
     importlib.reload(src.config)
 
 

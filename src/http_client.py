@@ -50,3 +50,23 @@ def http_post_json(url, error_class, service_name, json_body=None, timeout=30):
         ) from e
     except (ValueError, requests.exceptions.JSONDecodeError) as e:
         raise error_class(f"Invalid JSON response from {service_name}: {e}") from e
+
+
+def http_get_text(url, error_class, service_name, timeout=10):
+    """Perform a GET request and return the response body as text.
+
+    Raises error_class (wrapping the underlying requests exception) on failure.
+    Callers should catch per-URL so a single failure does not abort the batch.
+    """
+    try:
+        response = requests.get(url, timeout=timeout)
+        response.raise_for_status()
+        return response.text
+    except requests.exceptions.ConnectionError as e:
+        raise error_class(f"Cannot connect to {service_name} at {url}: {e}") from e
+    except requests.exceptions.Timeout as e:
+        raise error_class(f"{service_name} request timed out: {e}") from e
+    except requests.exceptions.HTTPError as e:
+        raise error_class(
+            f"{service_name} returned an error (HTTP {response.status_code}): {e}"
+        ) from e

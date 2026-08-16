@@ -55,6 +55,13 @@ RERANKER_MODEL_ID = os.getenv(
 RERANKER_LOCAL_PATH = os.getenv("RERANKER_LOCAL_PATH", "./models/reranker")
 RERANK_TOP_K = int(os.getenv("RERANK_TOP_K", "3"))
 
+# Page fetching and passage re-ranking (issue #62)
+FETCH_PAGE_ENABLED = os.getenv("FETCH_PAGE_ENABLED", "true").lower() in ("1", "true", "yes")
+FETCH_PAGE_TOP_N = int(os.getenv("FETCH_PAGE_TOP_N", "3"))
+FETCH_PAGE_TIMEOUT = int(os.getenv("FETCH_PAGE_TIMEOUT", "3"))
+PASSAGE_CHARS = int(os.getenv("PASSAGE_CHARS", "250"))
+RERANK_MIN_SCORE = float(os.getenv("RERANK_MIN_SCORE", "0.0"))
+
 # Brain (Ollama) settings
 OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434/api/chat")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")

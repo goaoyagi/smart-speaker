@@ -253,3 +253,199 @@ def test_scores_absorbs_torch_like_tensor():
 
     logits = _FakeTensor([[0.1], [0.9]])
     assert _Reranker._scores(logits) == [0.1, 0.9]
+
+
+class TestSplitPassages:
+    def test_short_text_returns_single(self):
+        assert Retriever._split_passages("短いテキスト", char_limit=250) == ["短いテキスト"]
+
+    def test_splits_on_sentence_end(self):
+        text = "A" * 200 + "。" + "B" * 200 + "。" + "C" * 50
+        passages = Retriever._split_passages(text, char_limit=250)
+        assert len(passages) >= 2
+        assert all(len(p) <= 260 for p in passages)
+
+    def test_splits_on_newline(self):
+        text = "A" * 200 + "\n" + "B" * 200
+        passages = Retriever._split_passages(text, char_limit=250)
+        assert len(passages) == 2
+
+    def test_empty_passages_removed(self):
+        text = "。" * 300
+        passages = Retriever._split_passages(text, char_limit=250)
+        assert all(p for p in passages)
+
+
+class TestFetchAndRerankPassages:
+    def test_disabled_returns_original(self, retriever, mocker):
+        mocker.patch("src.retriever.FETCH_PAGE_ENABLED", False)
+        results = [
+            {"title": "T1", "content": "C1", "url": "http://a.com"},
+            {"title": "T2", "content": "C2", "url": "http://b.com"},
+        ]
+        returned = retriever._fetch_and_rerank_passages("query", results)
+        assert returned == results
+
+    def test_empty_results_returns_empty(self, retriever, mocker):
+        mocker.patch("src.retriever.FETCH_PAGE_ENABLED", True)
+        assert retriever._fetch_and_rerank_passages("query", []) == []
+
+    def test_fetch_success_replaces_snippet_with_passages(self, retriever, mocker):
+        mocker.patch("src.retriever.FETCH_PAGE_ENABLED", True)
+        mocker.patch("src.retriever.FETCH_PAGE_TOP_N", 2)
+        mocker.patch("src.retriever.PASSAGE_CHARS", 500)
+        mocker.patch("src.retriever.RERANK_MIN_SCORE", 0.0)
+        mocker.patch("src.retriever.CONTEXT_CHAR_BUDGET", 99999)
+
+        def fake_fetch(url):
+            if url == "http://a.com":
+                return "これは抽出された本文です。とても長い文章が含まれています。"
+            return None
+
+        mocker.patch.object(retriever, "_fetch_page_text", side_effect=fake_fetch)
+        mocker.patch.object(retriever._reranker, "_load")
+        retriever._reranker._tokenizer = Mock(return_value={"input_ids": Mock()})
+        retriever._reranker._model = Mock(
+            return_value=SimpleNamespace(logits=[[0.9], [0.3]])
+        )
+
+        results = [
+            {"title": "T1", "content": "snippet1", "url": "http://a.com"},
+            {"title": "T2", "content": "snippet2", "url": "http://b.com"},
+        ]
+        returned = retriever._fetch_and_rerank_passages("query", results)
+
+        assert len(returned) >= 1
+        assert returned[0]["content"] == "これは抽出された本文です。とても長い文章が含まれています。"
+
+    def test_one_fetch_failure_others_continue(self, retriever, mocker):
+        mocker.patch("src.retriever.FETCH_PAGE_ENABLED", True)
+        mocker.patch("src.retriever.FETCH_PAGE_TOP_N", 2)
+        mocker.patch("src.retriever.PASSAGE_CHARS", 500)
+        mocker.patch("src.retriever.RERANK_MIN_SCORE", 0.0)
+        mocker.patch("src.retriever.CONTEXT_CHAR_BUDGET", 99999)
+
+        def fake_fetch(url):
+            if url == "http://a.com":
+                return "抽出された本文です。"
+            raise SearchError("fail")
+
+        mocker.patch.object(retriever, "_fetch_page_text", side_effect=fake_fetch)
+        mocker.patch.object(retriever._reranker, "_load")
+        retriever._reranker._tokenizer = Mock(return_value={"input_ids": Mock()})
+        retriever._reranker._model = Mock(
+            return_value=SimpleNamespace(logits=[[0.9], [0.5]])
+        )
+
+        results = [
+            {"title": "T1", "content": "snippet1", "url": "http://a.com"},
+            {"title": "T2", "content": "snippet2", "url": "http://b.com"},
+        ]
+        returned = retriever._fetch_and_rerank_passages("query", results)
+
+        contents = {r["content"] for r in returned}
+        assert "抽出された本文です。" in contents
+        assert "snippet2" in contents
+
+    def test_second_rerank_failure_degrades(self, retriever, mocker):
+        mocker.patch("src.retriever.FETCH_PAGE_ENABLED", True)
+        mocker.patch("src.retriever.FETCH_PAGE_TOP_N", 1)
+        mocker.patch("src.retriever.RERANK_MIN_SCORE", 0.0)
+        mocker.patch("src.retriever.CONTEXT_CHAR_BUDGET", 99999)
+
+        mocker.patch.object(retriever, "_fetch_page_text", return_value="抽出本文")
+        mocker.patch.object(
+            retriever._reranker,
+            "rerank",
+            side_effect=RuntimeError("rerank failed"),
+        )
+        warning = mocker.patch("src.retriever.logger.warning")
+
+        results = [
+            {"title": "T1", "content": "snippet1", "url": "http://a.com"},
+        ]
+        returned = retriever._fetch_and_rerank_passages("query", results)
+
+        assert len(returned) == 1
+        assert returned[0]["content"] == "抽出本文"
+        assert any("Passage re-ranking failed" in str(c) for c in warning.call_args_list)
+
+    def test_min_score_filters_low_scores(self, retriever, mocker):
+        mocker.patch("src.retriever.FETCH_PAGE_ENABLED", True)
+        mocker.patch("src.retriever.FETCH_PAGE_TOP_N", 1)
+        mocker.patch("src.retriever.RERANK_MIN_SCORE", 0.5)
+        mocker.patch("src.retriever.CONTEXT_CHAR_BUDGET", 99999)
+
+        mocker.patch.object(retriever, "_fetch_page_text", return_value="抽出本文")
+        mocker.patch.object(retriever._reranker, "_load")
+        retriever._reranker._tokenizer = Mock(return_value={"input_ids": Mock()})
+        retriever._reranker._model = Mock(
+            return_value=SimpleNamespace(logits=[[0.3]])
+        )
+
+        results = [
+            {"title": "T1", "content": "snippet1", "url": "http://a.com"},
+        ]
+        returned = retriever._fetch_and_rerank_passages("query", results)
+
+        assert returned == []
+
+    def test_all_dropped_by_score_returns_empty(self, retriever, mocker):
+        mocker.patch("src.retriever.FETCH_PAGE_ENABLED", True)
+        mocker.patch("src.retriever.FETCH_PAGE_TOP_N", 2)
+        mocker.patch("src.retriever.RERANK_MIN_SCORE", 0.9)
+        mocker.patch("src.retriever.CONTEXT_CHAR_BUDGET", 99999)
+
+        mocker.patch.object(retriever, "_fetch_page_text", return_value="抽出本文")
+        mocker.patch.object(retriever._reranker, "_load")
+        retriever._reranker._tokenizer = Mock(return_value={"input_ids": Mock()})
+        retriever._reranker._model = Mock(
+            return_value=SimpleNamespace(logits=[[0.1], [0.2]])
+        )
+
+        results = [
+            {"title": "T1", "content": "s1", "url": "http://a.com"},
+            {"title": "T2", "content": "s2", "url": "http://b.com"},
+        ]
+        returned = retriever._fetch_and_rerank_passages("query", results)
+
+        assert returned == []
+
+    def test_context_char_budget_clips(self, retriever, mocker):
+        mocker.patch("src.retriever.FETCH_PAGE_ENABLED", True)
+        mocker.patch("src.retriever.FETCH_PAGE_TOP_N", 1)
+        mocker.patch("src.retriever.RERANK_MIN_SCORE", 0.0)
+        mocker.patch("src.retriever.CONTEXT_CHAR_BUDGET", 30)
+
+        mocker.patch.object(
+            retriever, "_fetch_page_text", return_value="長い本文です。" * 20
+        )
+        mocker.patch.object(retriever._reranker, "_load")
+        retriever._reranker._tokenizer = Mock(return_value={"input_ids": Mock()})
+        retriever._reranker._model = Mock(
+            return_value=SimpleNamespace(logits=[[0.9]] * 20)
+        )
+
+        results = [
+            {"title": "T1", "content": "s1", "url": "http://a.com"},
+        ]
+        returned = retriever._fetch_and_rerank_passages("query", results)
+
+        total = sum(len(r["title"]) + len(r["content"]) for r in returned)
+        assert total <= 30 or len(returned) == 1
+
+    def test_non_http_url_skipped(self, retriever, mocker):
+        mocker.patch("src.retriever.FETCH_PAGE_ENABLED", True)
+        mocker.patch("src.retriever.FETCH_PAGE_TOP_N", 1)
+        mocker.patch("src.retriever.RERANK_MIN_SCORE", 0.0)
+        mocker.patch("src.retriever.CONTEXT_CHAR_BUDGET", 99999)
+
+        http_get_text_spy = mocker.patch("src.retriever.http_get_text")
+
+        results = [
+            {"title": "T1", "content": "snippet1", "url": "ftp://a.com"},
+        ]
+        returned = retriever._fetch_and_rerank_passages("query", results)
+
+        http_get_text_spy.assert_not_called()
+        assert returned[0]["content"] == "snippet1"

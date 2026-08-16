@@ -5,6 +5,7 @@ Retriever module - Web search using SearXNG with optional ONNX Japanese rerankin
 
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .config import (
     SEARXNG_URL,
@@ -13,9 +14,15 @@ from .config import (
     RERANKER_MODEL_ID,
     RERANKER_LOCAL_PATH,
     RERANK_TOP_K,
+    FETCH_PAGE_ENABLED,
+    FETCH_PAGE_TOP_N,
+    FETCH_PAGE_TIMEOUT,
+    PASSAGE_CHARS,
+    RERANK_MIN_SCORE,
+    CONTEXT_CHAR_BUDGET,
     validate_url,
 )
-from .http_client import http_get_json
+from .http_client import http_get_json, http_get_text
 from .audio_utils import log_init, log_ready
 from .exceptions import SearchError
 
@@ -133,7 +140,7 @@ class Retriever:
         log_ready("Retriever")
 
     def search_web(self, query):
-        """Search web using local SearXNG, then optionally rerank results."""
+        """Search web using local SearXNG, rerank, fetch pages, and re-rank passages."""
         if not isinstance(query, str) or not query.strip():
             logger.warning("Empty or invalid query")
             return []
@@ -169,4 +176,205 @@ class Retriever:
             })
 
         logger.info("Found %d results", len(results))
-        return self._reranker.rerank(query, results)
+        ranked = self._reranker.rerank(query, results)
+        return self._fetch_and_rerank_passages(query, ranked)
+
+    def _fetch_page_text(self, url):
+        """Fetch a single page and extract its main text via trafilatura.
+
+        Returns the extracted text, or None on any failure.
+        """
+        try:
+            validate_url(url, "page URL")
+        except ValueError:
+            logger.warning("Skipping non-http/https URL: %s", url)
+            return None
+
+        try:
+            html = http_get_text(
+                url,
+                error_class=SearchError,
+                service_name="Page fetch",
+                timeout=FETCH_PAGE_TIMEOUT,
+            )
+        except SearchError as e:
+            logger.warning("Page fetch failed for %s: %s", url, e)
+            return None
+
+        try:
+            import trafilatura
+        except ImportError:
+            logger.warning("trafilatura not available; cannot extract page text")
+            return None
+
+        try:
+            text = trafilatura.extract(html, include_comments=False, include_tables=False)
+            if not text or not text.strip():
+                logger.warning("trafilatura extracted empty text from %s", url)
+                return None
+            return text.strip()
+        except Exception as e:
+            logger.warning("trafilatura extraction failed for %s: %s", url, e)
+            return None
+
+    @staticmethod
+    def _split_passages(text, char_limit=None):
+        """Split text into passages of roughly char_limit characters.
+
+        Prefers splitting on sentence-ending punctuation or newlines.
+        """
+        if char_limit is None:
+            char_limit = PASSAGE_CHARS
+        if len(text) <= char_limit:
+            return [text]
+
+        passages = []
+        remaining = text
+        while len(remaining) > char_limit:
+            split_at = char_limit
+            chunk = remaining[:char_limit]
+            for sep in ("。", "！", "？", "\n", "、", " "):
+                idx = chunk.rfind(sep)
+                if idx > char_limit // 2:
+                    split_at = idx + 1
+                    break
+            passages.append(remaining[:split_at].strip())
+            remaining = remaining[split_at:].strip()
+        if remaining:
+            passages.append(remaining)
+        return [p for p in passages if p]
+
+    def _fetch_and_rerank_passages(self, query, ranked_results):
+        """Fetch pages for top results, extract text, split into passages,
+        and re-rank passages against the query.
+
+        Failures are non-fatal: each failing URL degrades to its snippet,
+        and a total second-stage failure returns the original results.
+        """
+        if not FETCH_PAGE_ENABLED or not ranked_results:
+            return ranked_results
+
+        top_n = ranked_results[:FETCH_PAGE_TOP_N]
+
+        # Fetch pages in parallel
+        url_to_text = {}
+        with ThreadPoolExecutor(max_workers=FETCH_PAGE_TOP_N) as executor:
+            future_to_result = {
+                executor.submit(self._fetch_page_text, r["url"]): r
+                for r in top_n
+            }
+            for future in as_completed(future_to_result):
+                result = future_to_result[future]
+                try:
+                    text = future.result()
+                except Exception as e:
+                    logger.warning("Unexpected error fetching %s: %s", result["url"], e)
+                    text = None
+                url_to_text[result["url"]] = text
+
+        # Build passages: extracted text → split, or fall back to snippet
+        all_passages = []
+        for result in top_n:
+            text = url_to_text.get(result["url"])
+            if text:
+                passages = self._split_passages(text)
+                for passage in passages:
+                    all_passages.append({
+                        "title": result["title"],
+                        "content": passage,
+                        "url": result["url"],
+                    })
+            else:
+                all_passages.append({
+                    "title": result["title"],
+                    "content": result["content"],
+                    "url": result["url"],
+                })
+
+        if not all_passages:
+            return ranked_results
+
+        # If no page text was extracted, skip the second rerank
+        any_fetched = any(url_to_text.values())
+        if not any_fetched:
+            logger.info("No page text extracted; skipping passage re-rank")
+            return ranked_results
+
+        # Second-stage rerank: query vs passages
+        try:
+            scored = self._reranker.rerank(query, all_passages)
+        except Exception:
+            logger.warning(
+                "Passage re-ranking failed; using extracted text as-is",
+                exc_info=True,
+            )
+            scored = all_passages
+
+        # Filter by RERANK_MIN_SCORE
+        if RERANK_MIN_SCORE > 0.0 and self._reranker._model is not None:
+            try:
+                scored = self._filter_by_score(query, scored)
+            except Exception:
+                logger.warning(
+                    "Score filtering failed; using unfiltered passages",
+                    exc_info=True,
+                )
+
+        if not scored:
+            logger.info("All passages dropped by RERANK_MIN_SCORE; returning empty")
+            return []
+
+        # Clip to CONTEXT_CHAR_BUDGET
+        kept = []
+        total_chars = 0
+        for item in scored:
+            item_chars = len(item.get("title", "")) + len(item.get("content", ""))
+            if total_chars + item_chars > CONTEXT_CHAR_BUDGET and kept:
+                break
+            kept.append(item)
+            total_chars += item_chars
+
+        if len(kept) < len(scored):
+            logger.warning(
+                "Dropped %s passages to fit CONTEXT_CHAR_BUDGET (%s)",
+                len(scored) - len(kept),
+                CONTEXT_CHAR_BUDGET,
+            )
+
+        logger.info(
+            "Page fetch: %d results → %d passages → %d kept",
+            len(top_n),
+            len(all_passages),
+            len(kept),
+        )
+        return kept
+
+    def _filter_by_score(self, query, results):
+        """Filter results whose cross-encoder score is below RERANK_MIN_SCORE."""
+        if not results:
+            return results
+        try:
+            self._reranker._load()
+            pairs = [
+                (result.get("title", "") + " " + result.get("content", "")).strip()
+                or result.get("url", "")
+                for result in results
+            ]
+            inputs = self._reranker._tokenizer(
+                [query] * len(pairs),
+                pairs,
+                padding=True,
+                truncation=True,
+                max_length=512,
+                return_tensors="np",
+            )
+            outputs = self._reranker._model(**inputs)
+            scores = self._reranker._scores(outputs.logits)
+            logger.info("Passage scores: min=%.4f max=%.4f", min(scores), max(scores))
+            return [
+                result
+                for score, result in zip(scores, results)
+                if score >= RERANK_MIN_SCORE
+            ]
+        except Exception:
+            raise
