@@ -34,26 +34,63 @@ _PAGE_FETCH_HEADERS = {
 }
 
 
+_PARAGRAPH_SPLIT_RE = re.compile(r'\n+')
+_SENTENCE_SPLIT_RE = re.compile(r'(?<=[。！？!?\n])\s*')
+
+
 def _split_into_passages(text, size):
-    """Split text into ~``size``-char passages, preferring sentence/line breaks."""
+    """Split text into ~``size``-char passages, preferring paragraph and
+    sentence boundaries over a hard cut.
+
+    A sentence longer than ``size`` (e.g. body text with no punctuation)
+    is hard-chunked so a single passage can never grow past ``size``
+    characters, no matter how the source text is punctuated.
+    """
+    if not text or not isinstance(text, str):
+        return []
+
+    text = text.strip()
     if not text:
         return []
 
-    segments = re.split(r'(?<=[。\n])', text)
+    if size <= 0:
+        size = PASSAGE_CHARS
+
+    if len(text) <= size:
+        return [text]
+
     passages = []
     current = ""
-    for segment in segments:
-        if current and len(current) + len(segment) > size:
-            stripped = current.strip()
-            if stripped:
-                passages.append(stripped)
-            current = segment
-        else:
-            current += segment
-    stripped = current.strip()
-    if stripped:
-        passages.append(stripped)
-    return passages
+
+    paragraphs = [p.strip() for p in _PARAGRAPH_SPLIT_RE.split(text) if p.strip()] or [text]
+    for paragraph in paragraphs:
+        sentences = [
+            s.strip() for s in _SENTENCE_SPLIT_RE.split(paragraph) if s.strip()
+        ] or [paragraph]
+
+        for sentence in sentences:
+            if len(sentence) > size:
+                if current:
+                    passages.append(current)
+                    current = ""
+                for i in range(0, len(sentence), size):
+                    chunk = sentence[i:i + size].strip()
+                    if chunk:
+                        passages.append(chunk)
+                continue
+
+            if not current:
+                current = sentence
+            elif len(current) + len(sentence) <= size:
+                current += sentence
+            else:
+                passages.append(current)
+                current = sentence
+
+    if current:
+        passages.append(current)
+
+    return [p for p in passages if p]
 
 
 class _Reranker:

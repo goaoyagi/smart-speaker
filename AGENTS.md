@@ -93,6 +93,7 @@ pytest で自動実行しない、手動実行のスクリプトを置く。テ�
 - **speaker.py**: 本家 Piper（espeak-ng 依存）は使わない。必ず日本語特化 fork の
   `piper-tts-plus` を使うこと（音声モデルは日本語 ONNX + JSON 設定）。
 - **retriever.py / brain.py**: 外部 API 通信部。テストでは必ずモック化する。
+- **retriever.py（本文取得・パッセージ分割）**: 本文を`PASSAGE_CHARS`字のパッセージに分割する際は、段落（改行）→文（`。！？!?`・改行）の順で境界を優先する。句読点のない1文が`PASSAGE_CHARS`字を超える場合は、その文自体を`PASSAGE_CHARS`字ずつ強制的にチャンク分割し、1パッセージが上限を超えないようにする（境界依存で無制限に育つ実装にしない）。
 - **brain.py**: `/api/chat` に `messages` / `keep_alive` / `options`（`num_ctx` / `num_predict` / `temperature` / `repeat_penalty`）を渡す。日本語限定の指示は `OLLAMA_SYSTEM_PROMPT`（system メッセージ）で維持する。補助呼び出しは `generate_auxiliary()`（`OLLAMA_AUX_NUM_PREDICT` / `OLLAMA_AUX_TEMPERATURE`）を使い、spoken system prompt は付けない。設定は `src/config.py` 経由。`prompt[:10000]` は使わず、検索コンテキストは `CONTEXT_CHAR_BUDGET`、履歴はトークン予算で削る。
 - **composer.py**: 本番は `compose_messages()`。日本語限定を維持する。文数は質問タイプに合わせる（事実は1〜3文、説明は3〜5文、結論先出し）。検索結果は関係するものだけを事実とし、無関係なら使わず、使う場合は推測で補わない。発話に「検索結果」とは言わない。`compose_prompt()` は切り戻し用に残す。
 - **query_prep.py**: 検索要否とクエリ書き換えを1回の補助LLM呼び出しで行う。失敗は非致命で元の質問へ degrade する。結果は発話しない。

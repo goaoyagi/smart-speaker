@@ -299,11 +299,53 @@ def test_split_into_passages_respects_size_and_boundaries():
     assert "".join(passages).replace("", "") != ""
     for passage in passages:
         assert passage
+        assert len(passage) <= 150
 
 
 def test_split_into_passages_empty_returns_empty_list():
     assert _split_into_passages("", 250) == []
     assert _split_into_passages(None, 250) == []
+    assert _split_into_passages("   ", 250) == []
+    assert _split_into_passages(123, 250) == []
+
+
+def test_split_into_passages_shorter_than_size_returned_as_single_passage():
+    text = "富士山は日本で最も高い山です。"
+    assert _split_into_passages(text, 250) == [text]
+
+
+def test_split_into_passages_hard_chunks_unbroken_text():
+    """Text with no sentence/line delimiters must still be bounded by ``size``."""
+    text = "あ" * 600
+    passages = _split_into_passages(text, 250)
+    assert [len(p) for p in passages] == [250, 250, 100]
+    assert "".join(passages) == text
+
+
+def test_split_into_passages_never_exceeds_size_across_many_sentences():
+    sentence1 = "富士山は日本で最も高い山です。" * 5
+    sentence2 = "標高は3776メートルあります。" * 5
+    sentence3 = "静岡県と山梨県にまたがっています。" * 5
+    text = sentence1 + sentence2 + sentence3
+    passages = _split_into_passages(text, 100)
+    assert len(passages) >= 3
+    for passage in passages:
+        assert len(passage) <= 100
+
+
+def test_split_into_passages_respects_paragraph_breaks():
+    text = "一段落目の文章です。" + "\n\n" + "二段落目の文章です。" * 20
+    passages = _split_into_passages(text, 50)
+    assert passages[0].startswith("一段落目の文章です。")
+    for passage in passages:
+        assert len(passage) <= 50
+
+
+def test_split_into_passages_non_positive_size_falls_back_to_default(mocker):
+    mocker.patch("src.retriever.PASSAGE_CHARS", 50)
+    text = "あ" * 120
+    passages = _split_into_passages(text, 0)
+    assert all(len(p) <= 50 for p in passages)
 
 
 def test_fetch_page_disabled_skips_fetch(retriever, mocker):
