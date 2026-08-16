@@ -31,6 +31,27 @@ def http_get_json(url, error_class, service_name, params=None, headers=None, tim
         raise error_class(f"Invalid JSON response from {service_name}: {e}") from e
 
 
+def http_get_html(url, error_class, service_name="WebPage", headers=None, timeout=3):
+    """Perform a GET request and return response text (HTML).
+
+    Raises error_class (wrapping the underlying requests exception) on failure.
+    """
+    try:
+        response = requests.get(url, headers=headers, timeout=timeout)
+        response.raise_for_status()
+        return response.text
+    except requests.exceptions.ConnectionError as e:
+        raise error_class(f"Cannot connect to {service_name} at {url}: {e}") from e
+    except requests.exceptions.Timeout as e:
+        raise error_class(f"{service_name} request timed out: {e}") from e
+    except requests.exceptions.HTTPError as e:
+        raise error_class(
+            f"{service_name} returned an error (HTTP {response.status_code}): {e}"
+        ) from e
+    except requests.exceptions.RequestException as e:
+        raise error_class(f"{service_name} request failed: {e}") from e
+
+
 def http_post_json(url, error_class, service_name, json_body=None, timeout=30):
     """Perform a POST request and return parsed JSON.
 

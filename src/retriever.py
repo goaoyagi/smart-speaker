@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """
 Retriever module - Web search using SearXNG with optional ONNX Japanese reranking
+and page content extraction.
 """
 
+import concurrent.futures
 import logging
 import os
+import re
 
 from .config import (
     SEARXNG_URL,
@@ -13,13 +16,75 @@ from .config import (
     RERANKER_MODEL_ID,
     RERANKER_LOCAL_PATH,
     RERANK_TOP_K,
+    RERANK_MIN_SCORE,
+    FETCH_PAGE_ENABLED,
+    FETCH_PAGE_TOP_N,
+    FETCH_PAGE_TIMEOUT,
+    PASSAGE_CHARS,
     validate_url,
 )
-from .http_client import http_get_json
+from .http_client import http_get_json, http_get_html
 from .audio_utils import log_init, log_ready
 from .exceptions import SearchError
 
 logger = logging.getLogger(__name__)
+
+
+def split_into_passages(text, max_chars=PASSAGE_CHARS):
+    """Split text into passages of approximately max_chars characters.
+
+    Prioritizes paragraph and sentence boundaries (newlines, punctuation).
+    """
+    if not text or not isinstance(text, str):
+        return []
+
+    text = text.strip()
+    if not text:
+        return []
+
+    if max_chars <= 0:
+        max_chars = 250
+
+    if len(text) <= max_chars:
+        return [text]
+
+    paragraphs = [p.strip() for p in re.split(r'\n+', text) if p.strip()]
+    if not paragraphs:
+        return [text[:max_chars]]
+
+    passages = []
+    current_passage = ""
+
+    for para in paragraphs:
+        sentences = [s.strip() for s in re.split(r'(?<=[。！？!?\n])\s*', para) if s.strip()]
+        if not sentences:
+            sentences = [para]
+
+        for sentence in sentences:
+            if not sentence:
+                continue
+            if len(sentence) > max_chars:
+                if current_passage:
+                    passages.append(current_passage)
+                    current_passage = ""
+                for i in range(0, len(sentence), max_chars):
+                    chunk = sentence[i:i + max_chars].strip()
+                    if chunk:
+                        passages.append(chunk)
+                continue
+
+            if not current_passage:
+                current_passage = sentence
+            elif len(current_passage) + len(sentence) <= max_chars:
+                current_passage += sentence
+            else:
+                passages.append(current_passage)
+                current_passage = sentence
+
+    if current_passage:
+        passages.append(current_passage)
+
+    return [p for p in passages if p]
 
 
 class _Reranker:
@@ -30,9 +95,18 @@ class _Reranker:
         self._tokenizer = None
         self._unavailable = False
 
-    def rerank(self, query, results):
-        if self._unavailable or not RERANKER_ENABLED or len(results) <= 1:
-            return results
+    def rerank(self, query, results, top_k=None, min_score=None):
+        if top_k is None:
+            top_k = RERANK_TOP_K
+        if min_score is None:
+            min_score = RERANK_MIN_SCORE
+
+        if not results:
+            return []
+
+        if self._unavailable or not RERANKER_ENABLED:
+            limit = top_k if top_k > 0 else len(results)
+            return results[:limit]
 
         try:
             self._load()
@@ -51,13 +125,27 @@ class _Reranker:
             )
             outputs = self._model(**inputs)
             scores = self._scores(outputs.logits)
+            logger.debug("Reranker scores: %s", scores)
+
+            scored = [
+                (score, result)
+                for score, result in zip(scores, results)
+                if score >= min_score
+            ]
+            if not scored:
+                logger.info(
+                    "All %d results scored below RERANK_MIN_SCORE (%s)",
+                    len(results),
+                    min_score,
+                )
+                return []
+
             ranked = sorted(
-                zip(scores, results),
+                scored,
                 key=lambda item: item[0],
                 reverse=True,
             )
-            # 0 or negative TOP_K means sort only (no truncate).
-            limit = RERANK_TOP_K if RERANK_TOP_K > 0 else len(ranked)
+            limit = top_k if top_k > 0 else len(ranked)
             top = [result for _, result in ranked[:limit]]
             logger.info("Reranked %d results to top %d", len(results), len(top))
             return top
@@ -67,7 +155,8 @@ class _Reranker:
                 "Reranking failed; using unranked search results",
                 exc_info=True,
             )
-            return results
+            limit = top_k if top_k > 0 else len(results)
+            return results[:limit]
 
     def _load(self):
         if self._unavailable:
@@ -132,8 +221,57 @@ class Retriever:
         self._reranker = _Reranker()
         log_ready("Retriever")
 
+    @staticmethod
+    def _fetch_single_page(url):
+        """Fetch a single page HTML string, returning None on failure."""
+        if not url or not isinstance(url, str):
+            return None
+        try:
+            validate_url(url, "Page URL")
+        except Exception:
+            logger.warning("Invalid URL scheme for page fetch: %s", url)
+            return None
+
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+            return http_get_html(
+                url,
+                error_class=SearchError,
+                service_name="WebPage",
+                headers=headers,
+                timeout=FETCH_PAGE_TIMEOUT,
+            )
+        except Exception as e:
+            logger.warning("Failed to fetch page %s: %s", url, e)
+            return None
+
+    @staticmethod
+    def _extract_page_text(html, url=""):
+        """Extract main text from HTML using trafilatura, returning None on failure."""
+        if not html:
+            return None
+        try:
+            import trafilatura
+            extracted = trafilatura.extract(
+                html,
+                include_links=False,
+                include_images=False,
+                include_tables=True,
+            )
+            if extracted and extracted.strip():
+                return extracted.strip()
+            return None
+        except ImportError:
+            logger.warning("trafilatura not installed; skipping page text extraction")
+            return None
+        except Exception as e:
+            logger.warning("Failed to extract text from %s: %s", url, e)
+            return None
+
     def search_web(self, query):
-        """Search web using local SearXNG, then optionally rerank results."""
+        """Search web using local SearXNG, optionally fetch page text, and rerank."""
         if not isinstance(query, str) or not query.strip():
             logger.warning("Empty or invalid query")
             return []
@@ -169,4 +307,63 @@ class Retriever:
             })
 
         logger.info("Found %d results", len(results))
-        return self._reranker.rerank(query, results)
+        if not results:
+            return []
+
+        # Stage 1: Result Reranking
+        ranked_results = self._reranker.rerank(
+            query,
+            results,
+            top_k=RERANK_TOP_K,
+            min_score=RERANK_MIN_SCORE,
+        )
+        if not ranked_results:
+            return []
+
+        if not FETCH_PAGE_ENABLED:
+            return ranked_results
+
+        # Stage 2: Page fetching, text extraction, and passage reranking
+        target_results = (
+            ranked_results[:FETCH_PAGE_TOP_N]
+            if FETCH_PAGE_TOP_N > 0
+            else ranked_results
+        )
+
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=max(1, len(target_results))
+        ) as executor:
+            html_list = list(
+                executor.map(
+                    lambda r: self._fetch_single_page(r.get("url", "")),
+                    target_results,
+                )
+            )
+
+        candidate_passages = []
+        for result, html in zip(target_results, html_list):
+            extracted_text = self._extract_page_text(html, result.get("url", ""))
+            if extracted_text:
+                passages = split_into_passages(extracted_text, max_chars=PASSAGE_CHARS)
+                for passage in passages:
+                    candidate_passages.append({
+                        "title": result.get("title", ""),
+                        "content": passage,
+                        "url": result.get("url", ""),
+                    })
+            else:
+                candidate_passages.append({
+                    "title": result.get("title", ""),
+                    "content": result.get("content", ""),
+                    "url": result.get("url", ""),
+                })
+
+        if not candidate_passages:
+            return []
+
+        return self._reranker.rerank(
+            query,
+            candidate_passages,
+            top_k=RERANK_TOP_K,
+            min_score=RERANK_MIN_SCORE,
+        )
