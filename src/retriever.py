@@ -5,6 +5,7 @@ Retriever module - Web search using SearXNG with optional ONNX Japanese rerankin
 
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 from .config import (
     SEARXNG_URL,
@@ -13,9 +14,14 @@ from .config import (
     RERANKER_MODEL_ID,
     RERANKER_LOCAL_PATH,
     RERANK_TOP_K,
+    FETCH_PAGE_ENABLED,
+    FETCH_PAGE_TOP_N,
+    FETCH_PAGE_TIMEOUT,
+    PASSAGE_CHARS,
+    RERANK_MIN_SCORE,
     validate_url,
 )
-from .http_client import http_get_json
+from .http_client import http_get_json, http_get_text
 from .audio_utils import log_init, log_ready
 from .exceptions import SearchError
 
@@ -31,7 +37,15 @@ class _Reranker:
         self._unavailable = False
 
     def rerank(self, query, results):
-        if self._unavailable or not RERANKER_ENABLED or len(results) <= 1:
+        return self._rerank(query, results)
+
+    def rerank_without_limit(self, query, results):
+        return self._rerank(query, results, top_k=0)
+
+    def _rerank(self, query, results, top_k=None):
+        if self._unavailable or not RERANKER_ENABLED or not results:
+            return results
+        if len(results) <= 1 and RERANK_MIN_SCORE <= 0.0:
             return results
 
         try:
@@ -51,15 +65,37 @@ class _Reranker:
             )
             outputs = self._model(**inputs)
             scores = self._scores(outputs.logits)
+            logger.info("Reranker scores: %s", [round(float(score), 4) for score in scores])
+
             ranked = sorted(
                 zip(scores, results),
                 key=lambda item: item[0],
                 reverse=True,
             )
+
+            filtered = [
+                (score, result)
+                for score, result in ranked
+                if float(score) >= RERANK_MIN_SCORE
+            ]
+
+            if not filtered:
+                logger.info(
+                    "All reranked results were below score threshold %.3f",
+                    RERANK_MIN_SCORE,
+                )
+                return []
+
             # 0 or negative TOP_K means sort only (no truncate).
-            limit = RERANK_TOP_K if RERANK_TOP_K > 0 else len(ranked)
-            top = [result for _, result in ranked[:limit]]
-            logger.info("Reranked %d results to top %d", len(results), len(top))
+            limit_setting = RERANK_TOP_K if top_k is None else top_k
+            limit = limit_setting if limit_setting > 0 else len(filtered)
+            top = [result for _, result in filtered[:limit]]
+            logger.info(
+                "Reranked %d results to top %d (threshold %.3f)",
+                len(results),
+                len(top),
+                RERANK_MIN_SCORE,
+            )
             return top
         except Exception:
             self._unavailable = True
@@ -133,7 +169,7 @@ class Retriever:
         log_ready("Retriever")
 
     def search_web(self, query):
-        """Search web using local SearXNG, then optionally rerank results."""
+        """Search web using local SearXNG, then optionally rerank and fetch passages."""
         if not isinstance(query, str) or not query.strip():
             logger.warning("Empty or invalid query")
             return []
@@ -168,5 +204,127 @@ class Retriever:
                 'url': result.get('url', '')
             })
 
-        logger.info("Found %d results", len(results))
-        return self._reranker.rerank(query, results)
+        logger.info("Found %d raw results", len(results))
+        reranked_results = self._reranker.rerank(query, results)
+
+        if not FETCH_PAGE_ENABLED:
+            return reranked_results
+
+        return self._fetch_and_rerank_passages(query, reranked_results)
+
+    def _fetch_and_rerank_passages(self, query, results):
+        if not results:
+            return []
+
+        top_n = FETCH_PAGE_TOP_N if FETCH_PAGE_TOP_N > 0 else len(results)
+        fetch_targets = results[:top_n]
+        passage_candidates = list(results[top_n:])
+
+        with ThreadPoolExecutor(max_workers=max(1, len(fetch_targets))) as executor:
+            for candidates in executor.map(self._result_to_passages, fetch_targets):
+                passage_candidates.extend(candidates)
+
+        if not passage_candidates:
+            return []
+
+        reranked_passages = self._reranker.rerank_without_limit(query, passage_candidates)
+        logger.info(
+            "Passage enrichment built %d candidates and returned %d",
+            len(passage_candidates),
+            len(reranked_passages),
+        )
+        return reranked_passages
+
+    def _result_to_passages(self, result):
+        fallback = {
+            'title': result.get('title', ''),
+            'content': result.get('content', ''),
+            'url': result.get('url', ''),
+        }
+        raw_url = fallback['url']
+        if not raw_url:
+            return [fallback]
+
+        try:
+            url = validate_url(raw_url, "search result URL")
+        except ValueError:
+            logger.warning("Skipping non-http(s) URL during page fetch: %s", raw_url)
+            return [fallback]
+
+        try:
+            html = http_get_text(
+                url,
+                error_class=SearchError,
+                service_name="PageFetch",
+                timeout=FETCH_PAGE_TIMEOUT,
+            )
+        except SearchError:
+            logger.warning("Page fetch failed; falling back to snippet for %s", url, exc_info=True)
+            return [fallback]
+
+        extracted = self._extract_page_text(html, url)
+        if not extracted:
+            return [fallback]
+
+        passages = self._split_passages(extracted)
+        if not passages:
+            return [fallback]
+
+        return [
+            {
+                'title': fallback['title'],
+                'content': passage,
+                'url': url,
+            }
+            for passage in passages
+        ]
+
+    @staticmethod
+    def _extract_page_text(html, url):
+        try:
+            import trafilatura
+        except ImportError:
+            logger.warning("trafilatura is unavailable; using snippets", exc_info=True)
+            return ""
+
+        try:
+            extracted = trafilatura.extract(html, output_format="txt")
+        except Exception:
+            logger.warning("Page extraction failed; using snippet for %s", url, exc_info=True)
+            return ""
+
+        if not extracted:
+            logger.warning("Page extraction produced empty content; using snippet for %s", url)
+            return ""
+
+        lines = [line.strip() for line in extracted.splitlines() if line.strip()]
+        return "\n".join(lines)
+
+    @staticmethod
+    def _split_passages(text):
+        cleaned = text.strip()
+        if not cleaned:
+            return []
+
+        max_chars = PASSAGE_CHARS if PASSAGE_CHARS > 0 else len(cleaned)
+        passages = []
+        start = 0
+
+        while start < len(cleaned):
+            end = min(start + max_chars, len(cleaned))
+            if end < len(cleaned):
+                sentence_break = cleaned.rfind("。", start, end)
+                newline_break = cleaned.rfind("\n", start, end)
+                split_at = max(sentence_break, newline_break)
+                if split_at > start:
+                    end = split_at + 1
+
+            passage = cleaned[start:end].strip()
+            if passage:
+                passages.append(passage)
+
+            if end <= start:
+                end = min(start + max_chars, len(cleaned))
+            start = end
+
+        return passages
