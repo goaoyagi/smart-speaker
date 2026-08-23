@@ -1,0 +1,18 @@
+# SearXNG settings for AI Smart Speaker.
+#
+# retriever.py calls /search?format=json, which the SearXNG defaults do not
+# allow, so the json format and the disabled limiter are required here.
+# secret_key is replaced with a generated value by deploy/install.sh.
+use_default_settings: true
+
+server:
+  secret_key: "__SEARXNG_SECRET_KEY__"
+  limiter: false
+  public_instance: false
+
+search:
+  formats:
+    - html
+    - json
+  language: ja
+  safe_search: 0

@@ -1,0 +1,21 @@
+[Unit]
+Description=AI Smart Speaker (push-to-talk voice assistant)
+Documentation=https://github.com/goaoyagi/smart-speaker
+After=network-online.target sound.target searxng.service ollama.service
+Wants=network-online.target searxng.service
+
+[Service]
+Type=simple
+User=__RUN_USER__
+Group=__RUN_USER__
+SupplementaryGroups=__SUPPLEMENTARY_GROUPS__
+WorkingDirectory=__PROJECT_DIR__
+Environment=PYTHONUNBUFFERED=1
+ExecStart=__PYTHON_BIN__ -m src.main
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

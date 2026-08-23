@@ -53,12 +53,15 @@ pip install -e ".[dev]"
 
 2. **Dockerコンテナの起動**
    ```bash
-   # SearXNG
-   docker run -d -p 8080:8080 --name searxng searxng/searxng
+   # SearXNG（JSON APIを使うため deploy/searxng/settings.yml が必要）
+   docker run -d -p 8080:8080 --name searxng \
+     -v "$(pwd)/deploy/searxng:/etc/searxng:ro" searxng/searxng
    
    # Ollama (ローカル実行の場合は不要)
    docker run -d -p 11434:11434 --name ollama ollama/ollama
    ```
+
+   SearXNG の既定設定では `format=json` が拒否されるため、`retriever.py` から使うには `search.formats` に `json` を含む設定ファイルが必要です。Raspberry Pi で常駐運用する場合は、この手動起動ではなく「[Raspberry Pi での自動起動](#raspberry-pi-での自動起動常駐運用)」の `deploy/install.sh` を使ってください（`secret_key` の生成と systemd 登録まで行います）。
 
 3. **音声モデルの配置**
 
@@ -98,6 +101,102 @@ python3 -m src.main
 
 # またはシステムPythonを使用
 python3 -m src.main
+```
+
+## Raspberry Pi での自動起動（常駐運用）
+
+ラズパイの電源を入れるだけで、SearXNGコンテナと `src/main.py` が起動し、ボタンを押せば会話できる状態にします。設定は `deploy/` にまとめてこのリポジトリで管理しています。
+
+```
+deploy/
+├── install.sh              # systemdユニットの生成・配置・有効化
+├── uninstall.sh            # ユニットの停止・削除
+├── searxng.service         # SearXNGコンテナ用ユニットのテンプレート
+├── smart-speaker.service   # python3 -m src.main 常駐用ユニットのテンプレート
+└── searxng/settings.yml    # SearXNGのJSON API有効化設定（secret_keyは生成時に埋め込み）
+```
+
+### インストール
+
+前提として、Raspberry Pi に Docker（`curl -fsSL https://get.docker.com | sh`）と Ollama がインストール済みで、`.env` とモデル（`models/piper/`・`models/reranker/`）を配置済みであることを確認してください。
+
+```bash
+cd ~/smart-speaker            # リポジトリのルート
+sudo ./deploy/install.sh
+```
+
+`install.sh` は次の処理を行います。
+
+1. `deploy/searxng/settings.yml` を `/etc/searxng/settings.yml` に配置（`secret_key` はランダム生成。既存ファイルがあれば上書きしない）
+2. テンプレートからパス・実行ユーザー・ポートを埋め込んだ `searxng.service` / `smart-speaker.service` を `/etc/systemd/system/` に配置
+3. 両ユニットを `enable`（＝ラズパイ起動時に自動実行）し、起動する
+
+主な上書き用の環境変数（既定値で問題なければ指定不要）:
+
+```bash
+sudo RUN_USER=pi PYTHON_BIN=/home/pi/smart-speaker/venv/bin/python3 SEARXNG_PORT=8080 ./deploy/install.sh
+sudo START_SERVICES=false ./deploy/install.sh   # 配置と有効化のみ行い、起動はしない
+```
+
+実行ユーザーは既定で `sudo` を実行したユーザー（`$SUDO_USER`）、Python は `venv/bin/python3` があればそれ、無ければ `python3` を使います。`.env` はユニットの `WorkingDirectory`（リポジトリのルート）から `src/config.py` が読み込みます。
+
+Ollama をローカルにインストールしている場合、`ollama` のサービスも自動起動になっているか確認してください。
+
+```bash
+sudo systemctl enable --now ollama
+```
+
+アンインストール（ユニットの停止・削除。SearXNG設定も消す場合は `REMOVE_CONFIG=true`）:
+
+```bash
+sudo ./deploy/uninstall.sh
+```
+
+### 常駐プロセスの起動・停止
+
+本体（`src/main.py`）:
+
+```bash
+sudo systemctl stop smart-speaker.service      # 停止
+sudo systemctl start smart-speaker.service     # 常駐で起動
+sudo systemctl restart smart-speaker.service   # 再起動（コード・.env の変更を反映）
+sudo systemctl status smart-speaker.service    # 稼働状態の確認
+sudo systemctl disable smart-speaker.service   # 起動時の自動実行をやめる
+sudo systemctl enable smart-speaker.service    # 起動時の自動実行に戻す
+```
+
+SearXNG コンテナ:
+
+```bash
+sudo systemctl stop searxng.service       # コンテナを停止（--rm なので削除される）
+sudo systemctl start searxng.service      # コンテナを起動
+sudo systemctl restart searxng.service    # 作り直して起動
+sudo systemctl status searxng.service     # 稼働状態の確認
+docker ps                                 # コンテナの確認
+curl "http://localhost:8080/search?q=test&format=json"   # JSON APIの疎通確認
+```
+
+`docker run` / `docker stop` を直接使わず `systemctl` で操作してください。ユニットは `Restart=always` なので、`docker stop` だけではすぐに再起動されます。
+
+デバッグのために手動実行したいときは、常駐を止めてから実行します:
+
+```bash
+sudo systemctl stop smart-speaker.service
+python3 -m src.main
+```
+
+### ログの確認
+
+ログは systemd の journal に出ます（`logging` の出力がそのまま入ります）。
+
+```bash
+journalctl -u smart-speaker.service -f              # 本体のログを追尾
+journalctl -u smart-speaker.service -n 200          # 直近200行
+journalctl -u smart-speaker.service -b              # 今回の起動以降すべて
+journalctl -u smart-speaker.service --since "10 min ago"
+journalctl -u smart-speaker.service -p warning      # 警告以上だけ
+journalctl -u searxng.service -f                    # SearXNGコンテナのログ
+journalctl -u smart-speaker.service -u searxng.service -f   # 両方をまとめて追尾
 ```
 
 ## テスト
@@ -167,6 +266,13 @@ smart-speaker/
 ├── pyproject.toml          # 依存ライブラリの定義
 ├── .gitignore              # Git除外設定
 ├── .env.example            # 環境変数テンプレート
+├── deploy/                 # ラズパイ常駐運用（systemd）
+│   ├── install.sh          # systemdユニットの生成・配置・有効化
+│   ├── uninstall.sh        # ユニットの停止・削除
+│   ├── searxng.service     # SearXNGコンテナ用ユニットのテンプレート
+│   ├── smart-speaker.service  # src.main 常駐用ユニットのテンプレート
+│   └── searxng/
+│       └── settings.yml    # SearXNGのJSON API有効化設定
 ├── models/
 │   └── reranker/           # オフラインキャッシュ用Rerankingモデル（.gitignore対象）
 ├── conftest.py             # src/ を sys.path に追加（テスト用）
