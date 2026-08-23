@@ -128,6 +128,8 @@ sudo ./deploy/install.sh
 `install.sh` は次の処理を行います。
 
 1. `deploy/searxng/settings.yml` を `/etc/searxng/settings.yml` に配置（`secret_key` はランダム生成。既存ファイルがあれば上書きしない）
+   - すでに動作している SearXNG の設定ファイルを流用する場合は、そのディレクトリを `SEARXNG_CONFIG_DIR` で指定する（例: `sudo SEARXNG_CONFIG_DIR=/home/pi/searxng ./deploy/install.sh`）。指定したディレクトリの `settings.yml` はそのまま使われる
+   - service化そのものがJSON設定を要求するわけではない（`systemctl` は `docker run` の起動方法を変えるだけ）。`searxng/searxng` の現行イメージは設定なしだと `format=json` に 403 を返すため、設定ファイルの用意はコンテナの起動方法とは無関係に必要
 2. テンプレートからパス・実行ユーザー・ポートを埋め込んだ `searxng.service` / `smart-speaker.service` を `/etc/systemd/system/` に配置
 3. 両ユニットを `enable`（＝ラズパイ起動時に自動実行）し、起動する
 
