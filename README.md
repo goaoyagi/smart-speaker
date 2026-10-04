@@ -142,13 +142,19 @@ sudo START_SERVICES=false ./deploy/install.sh   # 配置と有効化のみ行い
 
 実行ユーザーは既定で `sudo` を実行したユーザー（`$SUDO_USER`）、Python は `venv/bin/python3` があればそれ、無ければ `python3` を使います。`.env` はユニットの `WorkingDirectory`（リポジトリのルート）から `src/config.py` が読み込みます。
 
+`.env` に `SEARXNG_URL` が無い場合、`install.sh` はユニットに `SEARXNG_URL=http://localhost:<SEARXNG_PORT>` を設定し、本体の検索先を公開ポートに合わせます。`.env` に `SEARXNG_URL` がある場合はその値を優先し、ポートが `SEARXNG_PORT` と一致しなければ警告を表示します。
+
+上書き用の値は systemd ユニットにそのまま埋め込まれるため、`install.sh` は書式を検証し、空白・改行・`|` などを含む値は拒否します。
+
+`smart-speaker.service` は `Restart=on-failure` です。異常終了した場合だけ再起動します。GPIO ボタンが使えない環境では、本体は1回だけ固定秒数の録音をして正常終了し、再起動しません。
+
 Ollama をローカルにインストールしている場合、`ollama` のサービスも自動起動になっているか確認してください。
 
 ```bash
 sudo systemctl enable --now ollama
 ```
 
-アンインストール（ユニットの停止・削除。SearXNG設定も消す場合は `REMOVE_CONFIG=true`）:
+アンインストール（ユニットの停止・削除。SearXNG設定も消す場合は `REMOVE_CONFIG=true`。ただし削除されるのは `install.sh` が生成した `settings.yml` だけで、流用した既存の設定やディレクトリ内のほかのファイルは残ります）:
 
 ```bash
 sudo ./deploy/uninstall.sh
