@@ -1,0 +1,22 @@
+[Unit]
+Description=SearXNG container for AI Smart Speaker
+Documentation=https://github.com/goaoyagi/smart-speaker
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+Restart=always
+RestartSec=5
+TimeoutStartSec=180
+ExecStartPre=-/usr/bin/docker rm -f __CONTAINER_NAME__
+ExecStart=/usr/bin/docker run --rm --name __CONTAINER_NAME__ \
+    -p __SEARXNG_PORT__:8080 \
+    -v __SEARXNG_CONFIG_DIR__:/etc/searxng:ro \
+    -e SEARXNG_BASE_URL=http://localhost:__SEARXNG_PORT__/ \
+    __SEARXNG_IMAGE__
+ExecStop=/usr/bin/docker stop __CONTAINER_NAME__
+
+[Install]
+WantedBy=multi-user.target
